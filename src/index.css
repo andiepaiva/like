@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-editor-bg: #1e1e2e;
+  --color-editor-surface: #252536;
+  --color-editor-surface-alt: #2a2a3d;
+  --color-editor-border: #33334d;
+  --color-editor-border-light: #3d3d5c;
+  --color-editor-text: #cdd6f4;
+  --color-editor-text-dim: #6c7086;
+  --color-editor-text-muted: #45475a;
+  --color-editor-accent: #89b4fa;
+  --color-editor-accent-dim: rgba(137, 180, 250, 0.12);
+  --color-editor-danger: #f38ba8;
+  --color-editor-success: #a6e3a1;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-editor-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-editor-border-light);
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
