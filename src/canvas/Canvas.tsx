@@ -420,6 +420,9 @@ function SelectionOverlay({
     const startTop = parseInt(node!.styles.top || '0') || 0
 
     // Se o elemento não é absolute, torná-lo
+    // Decisão de design: drag só funciona com position:absolute.
+    // Mutation é silenciosa (updateSilent) pois já foi feito pushHistory() no mousedown.
+    // Undo restaura ao estado pré-drag, inclusive a posição original.
     if (node!.styles.position !== 'absolute') {
       updateSilent(selectedElementId, { position: 'absolute', left: '0px', top: '0px' })
     }

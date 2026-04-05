@@ -61,3 +61,23 @@
 - **Por quê:** vite-plugin-pwa@1.2.0 suporta até Vite 7. Projeto usa Vite 8.
 - **Consequências:** App não funciona offline no MVP — aceitável pois é ferramenta desktop local
 - **Revisar quando:** vite-plugin-pwa lançar versão compatível com Vite 8
+
+---
+
+## DEC-007 — Drag força `position: absolute` silenciosamente
+
+- **Data:** 2026-04-05
+- **Decisão:** Quando usuário inicia drag num elemento com `position: static` ou `relative`, o código muda para `position: absolute` sem adicionar entrada no histórico
+- **Por quê:** Undo/redo ocorre como bloco único (pushHistory no mousedown). A mudança de position é consequência necessária do drag, não uma ação independente.
+- **Consequências:** Elemento muda para absolute e recebe `left: 0px, top: 0px` (preserva visibilidade durante drag inicial). Undo restaura posição pré-drag E o position original.
+- **Revisar quando:** Se o UX indicar que usuários esperam poder reverter "position: absolute" separadamente do undo
+
+---
+
+## DEC-008 — Grid desligado por padrão
+
+- **Data:** 2026-04-05
+- **Decisão:** `showGrid: false` em DEFAULT_CANVAS
+- **Por quê:** UX limpo — grid visual pode distrair. Usuário liga via Menu > Exibir > Mostrar grid quando precisa alinhar
+- **Consequências:** Canvas começa vazio de padrão, sem padrão visual
+- **Revisar quando:** Se feedback indicar que iniciantes esperam grid sempre visível
