@@ -87,8 +87,8 @@ export function Toolbar() {
   const updateCanvasSettings = useAppStore(s => s.updateCanvasSettings)
   const undo = useAppStore(s => s.undo)
   const redo = useAppStore(s => s.redo)
-  const deleteElement = useAppStore(s => s.deleteElement)
-  const duplicateElement = useAppStore(s => s.duplicateElement)
+  const deleteElements = useAppStore(s => s.deleteElements)
+  const duplicateElements = useAppStore(s => s.duplicateElements)
 
   const selectedElementId = selectedElementIds[0] ?? null
   const hasSelection = selectedElementIds.length > 0
@@ -173,13 +173,13 @@ export function Toolbar() {
       <ToolbarButton
         icon={Copy}
         tooltip="Duplicar (Ctrl+D)"
-        onClick={() => selectedElementIds.forEach(id => duplicateElement(id))}
+        onClick={() => duplicateElements(selectedElementIds)}
         disabled={!hasSelection}
       />
       <ToolbarButton
         icon={Trash2}
         tooltip="Deletar (Del)"
-        onClick={() => selectedElementIds.forEach(id => deleteElement(id))}
+        onClick={() => deleteElements(selectedElementIds)}
         disabled={!hasSelection}
         danger
       />
