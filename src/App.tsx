@@ -66,6 +66,26 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [deleteElements])
 
+  // ─── Atalho: Ctrl+Z / Ctrl+Shift+Z para undo/redo ────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault()
+        const { undo, redo } = useAppStore.getState()
+        if (e.shiftKey) {
+          redo()
+        } else {
+          undo()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   if (loading || !project) {
     return (
       <div className="h-screen w-screen bg-editor-bg text-editor-text flex items-center justify-center">
