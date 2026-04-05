@@ -49,29 +49,22 @@ function App() {
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [project, loading])
 
-  // ─── Atalho: Delete / Backspace apaga elementos selecionados ───
+  // ─── Atalhos de teclado unificados ───
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
+      // Delete / Backspace apaga elementos selecionados
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const ids = useAppStore.getState().selectedElementIds
         if (ids.length === 0) return
         e.preventDefault()
         deleteElements(ids)
+        return
       }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteElements])
 
-  // ─── Atalho: Ctrl+Z / Ctrl+Shift+Z para undo/redo ────────────
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-
+      // Ctrl+Z / Ctrl+Shift+Z para undo/redo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault()
         const { undo, redo } = useAppStore.getState()
@@ -80,11 +73,12 @@ function App() {
         } else {
           undo()
         }
+        return
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [deleteElements])
 
   if (loading || !project) {
     return (
