@@ -34,6 +34,7 @@ type MenuDef = {
 
 export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [isLightTheme, setIsLightTheme] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
 
   const project = useAppStore(s => s.project)
@@ -47,6 +48,20 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
   const updateCanvasSettings = useAppStore(s => s.updateCanvasSettings)
 
   const hasSelection = selectedElementIds.length > 0
+
+  // ─── Sincronizar estado do tema com DOM ─────────────────────
+  useEffect(() => {
+    // Ler estado inicial
+    setIsLightTheme(document.documentElement.classList.contains('light'))
+
+    // Observer para mudanças no classList
+    const observer = new MutationObserver(() => {
+      setIsLightTheme(document.documentElement.classList.contains('light'))
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+
+    return () => observer.disconnect()
+  }, [])
 
   // Fechar ao clicar fora
   useEffect(() => {
@@ -109,7 +124,7 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
         { type: 'separator' },
         { type: 'action', label: 'Variáveis', icon: Variable, onClick: () => { onOpenVariables?.(); setOpenMenu(null) } },
         { type: 'separator' },
-        { type: 'action', label: 'Alternar tema claro/escuro', icon: document.documentElement.classList.contains('light') ? Moon : Sun, onClick: toggleTheme },
+        { type: 'action', label: 'Alternar tema claro/escuro', icon: isLightTheme ? Moon : Sun, onClick: toggleTheme },
       ],
     },
   ]
