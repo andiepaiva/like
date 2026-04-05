@@ -15,8 +15,10 @@ export interface AppStore {
   renameElement: (id: string, label: string) => void
 
   // ─── Seleção ───────────────────────────────────────────────
-  selectedElementId: string | null
-  setSelectedElementId: (id: string | null) => void
+  selectedElementIds: string[]
+  setSelectedElementIds: (ids: string[]) => void
+  toggleSelectedElement: (id: string) => void
+  addSelectedElement: (id: string) => void
 
   // ─── Tokens e Estilos Globais ──────────────────────────────
   addToken: (category: 'colors' | 'typography' | 'spacing' | 'other', token: Token) => void
@@ -28,7 +30,7 @@ export interface AppStore {
 
   // ─── Histórico (Undo/Redo) ─────────────────────────────────
   history: Project[]
-  historyIndex: number
+  future: Project[]
   pushHistory: () => void
   undo: () => void
   redo: () => void

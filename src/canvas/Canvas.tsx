@@ -4,16 +4,26 @@ import type { ElementNode } from '@/types'
 
 export function Canvas() {
   const root = useAppStore(s => s.project?.root)
-  const selectedElementId = useAppStore(s => s.selectedElementId)
-  const setSelectedElementId = useAppStore(s => s.setSelectedElementId)
+  const selectedElementIds = useAppStore(s => s.selectedElementIds)
+  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
+  const toggleSelectedElement = useAppStore(s => s.toggleSelectedElement)
   const canvasSettings = useAppStore(s => s.canvasSettings)
   const updateCanvasSettings = useAppStore(s => s.updateCanvasSettings)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const artboardRef = useRef<HTMLDivElement>(null)
-  const isPanningRef = useRef(false)
-  const panStart = useRef({ x: 0, y: 0 })
   const interactionRef = useRef<'idle' | 'resizing' | 'panning'>('idle')
+
+  // Refs estáveis para pan — evitam que o useEffect re-attache listeners
+  const panStateRef = useRef({
+    offsetX: canvasSettings.offsetX,
+    offsetY: canvasSettings.offsetY,
+  })
+  panStateRef.current.offsetX = canvasSettings.offsetX
+  panStateRef.current.offsetY = canvasSettings.offsetY
+
+  const updateCanvasSettingsRef = useRef(updateCanvasSettings)
+  updateCanvasSettingsRef.current = updateCanvasSettings
 
   // ─── Zoom com Ctrl+Scroll ─────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -26,14 +36,14 @@ export function Canvas() {
   }, [canvasSettings.zoom, updateCanvasSettings])
 
   // ─── Pan com Espaço+Drag ou Middle click ───────────────────
+  // Deps vazias: usa refs para tudo, então listeners são registrados uma única vez
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     let spaceDown = false
-    const offsetRef = { x: canvasSettings.offsetX, y: canvasSettings.offsetY }
-    offsetRef.x = canvasSettings.offsetX
-    offsetRef.y = canvasSettings.offsetY
+    let isPanning = false
+    const panStart = { x: 0, y: 0 }
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.code === 'Space' && !spaceDown && e.target === document.body) {
@@ -47,33 +57,32 @@ export function Canvas() {
       if (e.code === 'Space') {
         spaceDown = false
         container!.style.cursor = ''
-        isPanningRef.current = false
+        isPanning = false
         interactionRef.current = 'idle'
       }
     }
 
     function onMouseDown(e: MouseEvent) {
       if (spaceDown || e.button === 1) {
-        isPanningRef.current = true
+        isPanning = true
         interactionRef.current = 'panning'
-        panStart.current = { x: e.clientX - offsetRef.x, y: e.clientY - offsetRef.y }
+        panStart.x = e.clientX - panStateRef.current.offsetX
+        panStart.y = e.clientY - panStateRef.current.offsetY
         container!.style.cursor = 'grabbing'
         e.preventDefault()
       }
     }
 
     function onMouseMove(e: MouseEvent) {
-      if (!isPanningRef.current) return
-      const newX = e.clientX - panStart.current.x
-      const newY = e.clientY - panStart.current.y
-      offsetRef.x = newX
-      offsetRef.y = newY
-      updateCanvasSettings({ offsetX: newX, offsetY: newY })
+      if (!isPanning) return
+      const newX = e.clientX - panStart.x
+      const newY = e.clientY - panStart.y
+      updateCanvasSettingsRef.current({ offsetX: newX, offsetY: newY })
     }
 
     function onMouseUp() {
-      if (isPanningRef.current) {
-        isPanningRef.current = false
+      if (isPanning) {
+        isPanning = false
         interactionRef.current = 'idle'
         container!.style.cursor = spaceDown ? 'grab' : ''
       }
@@ -92,24 +101,21 @@ export function Canvas() {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [canvasSettings.offsetX, canvasSettings.offsetY, updateCanvasSettings])
+  }, []) // ← sem deps: registra listeners uma vez, usa refs para valores mutáveis
 
   // Clique no fundo = deselecionar (APENAS se não acabamos de resize/pan)
   function handleBackgroundClick(e: React.MouseEvent) {
-    // Se acabou de interagir (resize, pan), não deselecionar
     if (interactionRef.current !== 'idle') return
 
     const target = e.target as HTMLElement
-    // Só deselecionar se clicou no container, no grid, ou no artboard background
     const isBackground = target === containerRef.current
       || target.dataset.canvasBg !== undefined
       || target.dataset.artboard !== undefined
     if (isBackground) {
-      setSelectedElementId(null)
+      setSelectedElementIds([])
     }
   }
 
-  // Marcar que uma interação está em andamento (chamado pelo SelectionOverlay)
   const markInteraction = useCallback((type: 'idle' | 'resizing' | 'panning') => {
     interactionRef.current = type
   }, [])
@@ -123,13 +129,16 @@ export function Canvas() {
       onWheel={handleWheel}
       onMouseDown={handleBackgroundClick}
     >
-      {/* Grid de fundo */}
+      {/* Grid de fundo — linhas sutis (ativável pelo menu Exibir) */}
       {canvasSettings.showGrid && (
         <div
           data-canvas-bg
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)`,
+            backgroundImage: `
+              linear-gradient(to right, rgba(128,128,128,0.06) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(128,128,128,0.06) 1px, transparent 1px)
+            `,
             backgroundSize: `${canvasSettings.gridSize * canvasSettings.zoom}px ${canvasSettings.gridSize * canvasSettings.zoom}px`,
             backgroundPosition: `${canvasSettings.offsetX % (canvasSettings.gridSize * canvasSettings.zoom)}px ${canvasSettings.offsetY % (canvasSettings.gridSize * canvasSettings.zoom)}px`,
           }}
@@ -161,105 +170,170 @@ export function Canvas() {
         >
           <RenderNode
             node={root}
-            selectedElementId={selectedElementId}
-            zoom={canvasSettings.zoom}
-            markInteraction={markInteraction}
+            selectedElementIds={selectedElementIds}
           />
         </div>
       </div>
+
+      {/* Selection overlays — um por elemento selecionado */}
+      {selectedElementIds.map(id => (
+        containerRef.current && (
+          <SelectionOverlay
+            key={id}
+            selectedElementId={id}
+            containerRef={containerRef}
+            zoom={canvasSettings.zoom}
+            offsetX={canvasSettings.offsetX}
+            offsetY={canvasSettings.offsetY}
+            markInteraction={markInteraction}
+            isPrimary={selectedElementIds.length === 1}
+          />
+        )
+      ))}
     </div>
   )
 }
 
 // ─── Renderizar nó da árvore como elemento HTML real ─────────
-// SEM wrapper <div> parasita — o elemento é renderizado diretamente
+// Sem overlay dentro do elemento — o overlay é renderizado fora do artboard
 
 function RenderNode({
   node,
-  selectedElementId,
-  zoom,
-  markInteraction,
+  selectedElementIds,
 }: {
   node: ElementNode
-  selectedElementId: string | null
-  zoom: number
-  markInteraction: (type: 'idle' | 'resizing' | 'panning') => void
+  selectedElementIds: string[]
 }) {
-  const setSelectedElementId = useAppStore(s => s.setSelectedElementId)
-  const updateElementStyles = useAppStore(s => s.updateElementStyles)
-  const isSelected = selectedElementId === node.id
-  const elementRef = useRef<HTMLElement>(null)
+  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
+  const toggleSelectedElement = useAppStore(s => s.toggleSelectedElement)
 
   if (!node.visible) return null
 
   const Tag = node.tag as keyof React.JSX.IntrinsicElements
+  const isSelected = selectedElementIds.includes(node.id)
 
-  // Converter CSSProperties do nosso tipo para React.CSSProperties
-  // Adicionar position: relative para que o overlay de seleção se posicione corretamente
   const styles: React.CSSProperties = {
     ...(node.styles as React.CSSProperties),
     position: (node.styles.position as React.CSSProperties['position']) || 'relative',
+    outline: isSelected ? '2px solid #3b82f6' : undefined,
+    outlineOffset: isSelected ? '0px' : undefined,
   }
 
   function handleMouseDown(e: React.MouseEvent) {
     if (node.locked) return
     e.stopPropagation()
-    setSelectedElementId(node.id)
+    // Ctrl/Meta ou Shift = adicionar/remover da seleção
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      toggleSelectedElement(node.id)
+    } else {
+      setSelectedElementIds([node.id])
+    }
   }
 
-  // Props do elemento
   const elementProps: Record<string, unknown> = {
-    ref: elementRef,
     'data-editor-id': node.id,
     style: styles,
     onMouseDown: handleMouseDown,
     className: node.className?.join(' '),
   }
 
-  // Atributos HTML
   for (const [key, value] of Object.entries(node.attributes)) {
     elementProps[key] = value
   }
 
-  const isVoid = node.tag === 'img' || node.tag === 'input'
+  const isVoid = node.tag === 'img' || node.tag === 'input' || node.tag === 'br' || node.tag === 'hr'
+
+  if (isVoid) {
+    return <Tag {...(elementProps as Record<string, unknown>)} />
+  }
 
   return (
     <Tag {...(elementProps as Record<string, unknown>)}>
-      {/* Selection overlay — dentro do próprio elemento */}
-      {isSelected && (
-        <SelectionOverlay
-          node={node}
-          zoom={zoom}
-          markInteraction={markInteraction}
-        />
-      )}
-      {!isVoid && node.content}
-      {!isVoid && node.children.map(child => (
+      {node.content}
+      {node.children.map(child => (
         <RenderNode
           key={child.id}
           node={child}
-          selectedElementId={selectedElementId}
-          zoom={zoom}
-          markInteraction={markInteraction}
+          selectedElementIds={selectedElementIds}
         />
       ))}
     </Tag>
   )
 }
 
-// ─── Overlay de seleção com handles ──────────────────────────
+// ─── Selection Overlay — posicionado FORA do artboard ────────
+// Usa getBoundingClientRect do elemento real no DOM para posicionar handles
 
 function SelectionOverlay({
-  node,
+  selectedElementId,
+  containerRef,
   zoom,
+  offsetX,
+  offsetY,
   markInteraction,
+  isPrimary,
 }: {
-  node: ElementNode
+  selectedElementId: string
+  containerRef: React.RefObject<HTMLDivElement | null>
   zoom: number
+  offsetX: number
+  offsetY: number
   markInteraction: (type: 'idle' | 'resizing' | 'panning') => void
+  isPrimary: boolean
 }) {
   const updateElementStyles = useAppStore(s => s.updateElementStyles)
-  const startPos = useRef({ x: 0, y: 0, w: 0, h: 0 })
+  const node = useAppStore(s => {
+    if (!s.project) return null
+    return findNodeById(s.project.root, selectedElementId)
+  })
+  const [rect, setRect] = useState<DOMRect | null>(null)
+
+  // Recalcular posição do overlay quando muda seleção, zoom, offset ou estilo do nó
+  useEffect(() => {
+    const el = document.querySelector(`[data-editor-id="${selectedElementId}"]`) as HTMLElement | null
+    if (!el || !containerRef.current) {
+      setRect(null)
+      return
+    }
+
+    function measure() {
+      const elRect = el!.getBoundingClientRect()
+      const containerRect = containerRef.current!.getBoundingClientRect()
+      setRect(new DOMRect(
+        elRect.x - containerRect.x,
+        elRect.y - containerRect.y,
+        elRect.width,
+        elRect.height,
+      ))
+    }
+
+    measure()
+
+    // Re-medir em cada frame enquanto estiver selecionado (cobre resize em andamento)
+    let raf: number
+    function loop() {
+      measure()
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [selectedElementId, containerRef, zoom, offsetX, offsetY])
+
+  if (!rect || !node) return null
+
+  const handleSize = 8
+  const outlineWidth = 2
+
+  const handles = [
+    { dir: 'nw', cursor: 'nw-resize', style: { top: -handleSize / 2, left: -handleSize / 2 } },
+    { dir: 'n', cursor: 'n-resize', style: { top: -handleSize / 2, left: rect.width / 2 - handleSize / 2 } },
+    { dir: 'ne', cursor: 'ne-resize', style: { top: -handleSize / 2, left: rect.width - handleSize / 2 } },
+    { dir: 'e', cursor: 'e-resize', style: { top: rect.height / 2 - handleSize / 2, left: rect.width - handleSize / 2 } },
+    { dir: 'se', cursor: 'se-resize', style: { top: rect.height - handleSize / 2, left: rect.width - handleSize / 2 } },
+    { dir: 's', cursor: 's-resize', style: { top: rect.height - handleSize / 2, left: rect.width / 2 - handleSize / 2 } },
+    { dir: 'sw', cursor: 'sw-resize', style: { top: rect.height - handleSize / 2, left: -handleSize / 2 } },
+    { dir: 'w', cursor: 'w-resize', style: { top: rect.height / 2 - handleSize / 2, left: -handleSize / 2 } },
+  ]
 
   function handleResizeStart(direction: string) {
     return (e: React.MouseEvent) => {
@@ -267,31 +341,27 @@ function SelectionOverlay({
       e.preventDefault()
       markInteraction('resizing')
 
-      startPos.current = {
-        x: e.clientX,
-        y: e.clientY,
-        w: parseInt(node.styles.width || '0') || 0,
-        h: parseInt(node.styles.height || '0') || 0,
-      }
+      const startX = e.clientX
+      const startY = e.clientY
+      const startW = parseInt(node!.styles.width || '0') || 0
+      const startH = parseInt(node!.styles.height || '0') || 0
 
       function onMove(ev: MouseEvent) {
-        // Compensar zoom: mouse move de 10px com zoom 0.5 = 20px no canvas
-        const dx = (ev.clientX - startPos.current.x) / zoom
-        const dy = (ev.clientY - startPos.current.y) / zoom
+        const dx = (ev.clientX - startX) / zoom
+        const dy = (ev.clientY - startY) / zoom
         const changes: Record<string, string> = {}
 
-        if (direction.includes('e')) changes.width = `${Math.round(Math.max(16, startPos.current.w + dx))}px`
-        if (direction.includes('w')) changes.width = `${Math.round(Math.max(16, startPos.current.w - dx))}px`
-        if (direction.includes('s')) changes.height = `${Math.round(Math.max(16, startPos.current.h + dy))}px`
-        if (direction.includes('n')) changes.height = `${Math.round(Math.max(16, startPos.current.h - dy))}px`
+        if (direction.includes('e')) changes.width = `${Math.round(Math.max(16, startW + dx))}px`
+        if (direction.includes('w')) changes.width = `${Math.round(Math.max(16, startW - dx))}px`
+        if (direction.includes('s')) changes.height = `${Math.round(Math.max(16, startH + dy))}px`
+        if (direction.includes('n')) changes.height = `${Math.round(Math.max(16, startH - dy))}px`
 
-        updateElementStyles(node.id, changes)
+        updateElementStyles(selectedElementId, changes)
       }
 
       function onUp() {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
-        // Delay para evitar que o click que vem após mouseup deselecione
         requestAnimationFrame(() => {
           markInteraction('idle')
         })
@@ -302,38 +372,26 @@ function SelectionOverlay({
     }
   }
 
-  // Tamanho dos handles compensado pelo zoom (sempre 8px na tela)
-  const handleSize = 8 / zoom
-
-  const handles = [
-    { dir: 'nw', cursor: 'nw-resize', style: { top: 0, left: 0, transform: 'translate(-50%, -50%)' } },
-    { dir: 'n', cursor: 'n-resize', style: { top: 0, left: '50%', transform: 'translate(-50%, -50%)' } },
-    { dir: 'ne', cursor: 'ne-resize', style: { top: 0, right: 0, transform: 'translate(50%, -50%)' } },
-    { dir: 'e', cursor: 'e-resize', style: { top: '50%', right: 0, transform: 'translate(50%, -50%)' } },
-    { dir: 'se', cursor: 'se-resize', style: { bottom: 0, right: 0, transform: 'translate(50%, 50%)' } },
-    { dir: 's', cursor: 's-resize', style: { bottom: 0, left: '50%', transform: 'translate(-50%, 50%)' } },
-    { dir: 'sw', cursor: 'sw-resize', style: { bottom: 0, left: 0, transform: 'translate(-50%, 50%)' } },
-    { dir: 'w', cursor: 'w-resize', style: { top: '50%', left: 0, transform: 'translate(-50%, -50%)' } },
-  ]
-
-  // Outline width compensado pelo zoom
-  const outlineWidth = 2 / zoom
-
   return (
     <div
-      className="absolute inset-0 pointer-events-none"
+      className="absolute pointer-events-none"
       style={{
+        top: rect.y,
+        left: rect.x,
+        width: rect.width,
+        height: rect.height,
         zIndex: 9999,
         outline: `${outlineWidth}px solid #3b82f6`,
         outlineOffset: '0px',
       }}
     >
-      {handles.map(h => (
+      {isPrimary && handles.map(h => (
         <div
           key={h.dir}
           className="absolute pointer-events-auto bg-white rounded-sm"
           style={{
-            ...h.style,
+            top: h.style.top,
+            left: h.style.left,
             width: handleSize,
             height: handleSize,
             cursor: h.cursor,
@@ -344,4 +402,14 @@ function SelectionOverlay({
       ))}
     </div>
   )
+}
+
+// Busca recursiva por id (local, sem import extra)
+function findNodeById(node: ElementNode, id: string): ElementNode | null {
+  if (node.id === id) return node
+  for (const child of node.children) {
+    const found = findNodeById(child, id)
+    if (found) return found
+  }
+  return null
 }

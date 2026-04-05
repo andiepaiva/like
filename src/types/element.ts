@@ -55,6 +55,9 @@ export interface CSSProperties {
   backgroundPosition?: string
   opacity?: string
   border?: string
+  borderWidth?: string
+  borderStyle?: string
+  borderColor?: string
   borderTop?: string
   borderRight?: string
   borderBottom?: string

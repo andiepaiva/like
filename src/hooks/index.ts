@@ -1,1 +1,1 @@
-export { useSelectedElement } from './useSelectedElement'
+export { useSelectedElement, useSelectedElements } from './useSelectedElement'

@@ -15,6 +15,22 @@
   --color-editor-success: #a6e3a1;
 }
 
+/* ─── Tema claro ──────────────────────────────────────── */
+:root.light {
+  --color-editor-bg: #f5f5f7;
+  --color-editor-surface: #ffffff;
+  --color-editor-surface-alt: #f0f0f2;
+  --color-editor-border: #e0e0e4;
+  --color-editor-border-light: #d0d0d6;
+  --color-editor-text: #1c1c1e;
+  --color-editor-text-dim: #6e6e73;
+  --color-editor-text-muted: #aeaeb2;
+  --color-editor-accent: #0071e3;
+  --color-editor-accent-dim: rgba(0, 113, 227, 0.08);
+  --color-editor-danger: #ff3b30;
+  --color-editor-success: #34c759;
+}
+
 /* Scrollbar personalizada */
 ::-webkit-scrollbar {
   width: 6px;

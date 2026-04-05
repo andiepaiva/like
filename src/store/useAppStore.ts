@@ -72,7 +72,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   deleteElement: (id) => {
-    const { project, selectedElementId } = get()
+    const { project, selectedElementIds } = get()
     if (!project) return
     if (project.root.id === id) return // nunca deletar root
     get().pushHistory()
@@ -83,7 +83,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         updatedAt: now,
         root: removeNodeFromTree(project.root, id),
       },
-      selectedElementId: selectedElementId === id ? null : selectedElementId,
+      selectedElementIds: selectedElementIds.filter(i => i !== id),
       isSaved: false,
     })
   },
@@ -150,8 +150,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   // ─── Seleção ───────────────────────────────────────────────
-  selectedElementId: null,
-  setSelectedElementId: (id) => set({ selectedElementId: id }),
+  selectedElementIds: [],
+  setSelectedElementIds: (ids) => set({ selectedElementIds: ids }),
+  toggleSelectedElement: (id) => {
+    const { selectedElementIds } = get()
+    if (selectedElementIds.includes(id)) {
+      set({ selectedElementIds: selectedElementIds.filter(i => i !== id) })
+    } else {
+      set({ selectedElementIds: [...selectedElementIds, id] })
+    }
+  },
+  addSelectedElement: (id) => {
+    const { selectedElementIds } = get()
+    if (!selectedElementIds.includes(id)) {
+      set({ selectedElementIds: [...selectedElementIds, id] })
+    }
+  },
 
   // ─── Tokens ────────────────────────────────────────────────
   addToken: (category, token) => {
@@ -263,42 +277,43 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   // ─── Histórico ────────────────────────────────────────────
+  // Modelo: history contém snapshots do passado. O estado ATUAL é sempre `project`.
+  // pushHistory salva o estado ANTES da mutação.
+  // undo: salva estado atual como futuro, restaura último do passado.
+  // redo: salva estado atual como passado, restaura primeiro do futuro.
   history: [],
-  historyIndex: -1,
+  future: [],
 
   pushHistory: () => {
-    const { project, history, historyIndex } = get()
+    const { project, history } = get()
     if (!project) return
     const snapshot = structuredClone(project)
-    // Descartar redo futuro ao criar nova entrada
-    const trimmed = history.slice(0, historyIndex + 1)
-    trimmed.push(snapshot)
-    // Limitar tamanho
+    const trimmed = [...history, snapshot]
     if (trimmed.length > MAX_HISTORY) trimmed.shift()
-    set({ history: trimmed, historyIndex: trimmed.length - 1 })
+    // Nova ação descarta redo futuro
+    set({ history: trimmed, future: [] })
   },
 
   undo: () => {
-    const { history, historyIndex } = get()
-    if (historyIndex < 0) return
-    const snapshot = history[historyIndex]
-    if (!snapshot) return
+    const { history, future, project } = get()
+    if (history.length === 0 || !project) return
+    const prev = history[history.length - 1]
     set({
-      project: structuredClone(snapshot),
-      historyIndex: historyIndex - 1,
+      project: structuredClone(prev),
+      history: history.slice(0, -1),
+      future: [structuredClone(project), ...future],
       isSaved: false,
     })
   },
 
   redo: () => {
-    const { history, historyIndex } = get()
-    if (historyIndex >= history.length - 1) return
-    const nextIndex = historyIndex + 1
-    const snapshot = history[nextIndex]
-    if (!snapshot) return
+    const { history, future, project } = get()
+    if (future.length === 0 || !project) return
+    const next = future[0]
     set({
-      project: structuredClone(snapshot),
-      historyIndex: nextIndex,
+      project: structuredClone(next),
+      history: [...history, structuredClone(project)],
+      future: future.slice(1),
       isSaved: false,
     })
   },

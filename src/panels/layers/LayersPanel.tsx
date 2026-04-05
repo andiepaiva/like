@@ -66,17 +66,26 @@ export function LayersPanel() {
 }
 
 function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
-  const selectedElementId = useAppStore(s => s.selectedElementId)
-  const setSelectedElementId = useAppStore(s => s.setSelectedElementId)
+  const selectedElementIds = useAppStore(s => s.selectedElementIds)
+  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
+  const toggleSelectedElement = useAppStore(s => s.toggleSelectedElement)
   const deleteElement = useAppStore(s => s.deleteElement)
   const duplicateElement = useAppStore(s => s.duplicateElement)
   const updateElement = useAppStore(s => s.updateElement)
-  const isSelected = selectedElementId === node.id
+  const isSelected = selectedElementIds.includes(node.id)
   const isRoot = depth === 0
   const [collapsed, setCollapsed] = useState(false)
   const hasChildren = node.children.length > 0
 
   const Icon = TAG_ICONS[node.tag] || Square
+
+  function handleClick(e: React.MouseEvent) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      toggleSelectedElement(node.id)
+    } else {
+      setSelectedElementIds([node.id])
+    }
+  }
 
   return (
     <div>
@@ -89,7 +98,7 @@ function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
           }
         `}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => setSelectedElementId(node.id)}
+        onClick={handleClick}
       >
         {/* Chevron de collapse */}
         {hasChildren ? (

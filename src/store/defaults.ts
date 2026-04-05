@@ -7,7 +7,7 @@ const DEFAULT_CANVAS: CanvasSettings = {
   offsetY: 0,
   width: 1440,
   height: 900,
-  showGrid: true,
+  showGrid: false,
   snapToGrid: true,
   gridSize: 8,
 }

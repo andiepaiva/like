@@ -15,6 +15,7 @@ import {
   TextCursorInput,
   ZoomIn,
   ZoomOut,
+  Maximize,
   Save,
   Download,
   Minus,
@@ -78,15 +79,18 @@ function getDefaults(tag: HtmlTag): Partial<ElementNode> {
 export function Toolbar() {
   const project = useAppStore(s => s.project)
   const isSaved = useAppStore(s => s.isSaved)
-  const selectedElementId = useAppStore(s => s.selectedElementId)
+  const selectedElementIds = useAppStore(s => s.selectedElementIds)
   const insertElement = useAppStore(s => s.insertElement)
-  const setSelectedElementId = useAppStore(s => s.setSelectedElementId)
+  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
   const canvasSettings = useAppStore(s => s.canvasSettings)
   const updateCanvasSettings = useAppStore(s => s.updateCanvasSettings)
   const undo = useAppStore(s => s.undo)
   const redo = useAppStore(s => s.redo)
   const deleteElement = useAppStore(s => s.deleteElement)
   const duplicateElement = useAppStore(s => s.duplicateElement)
+
+  const selectedElementId = selectedElementIds[0] ?? null
+  const hasSelection = selectedElementIds.length > 0
 
   function handleInsert(tag: HtmlTag) {
     if (!project) return
@@ -108,12 +112,27 @@ export function Toolbar() {
     }
 
     insertElement(parentId, element)
-    setSelectedElementId(element.id)
+    setSelectedElementIds([element.id])
   }
 
   function handleZoom(delta: number) {
     const newZoom = Math.min(3, Math.max(0.25, canvasSettings.zoom + delta))
     updateCanvasSettings({ zoom: Math.round(newZoom * 100) / 100 })
+  }
+
+  function handleZoomToFit() {
+    const artboardW = project?.canvas?.width ?? 1440
+    const artboardH = project?.canvas?.height ?? 900
+    // Espaço disponível estimado: tela - painéis (~18rem cada) - toolbar (~3rem)
+    const viewW = window.innerWidth - 288 * 2
+    const viewH = window.innerHeight - 48
+    const zoom = Math.min(viewW / artboardW, viewH / artboardH) * 0.9
+    const clamped = Math.min(3, Math.max(0.25, Math.round(zoom * 100) / 100))
+    updateCanvasSettings({
+      zoom: clamped,
+      offsetX: 0,
+      offsetY: 0,
+    })
   }
 
   return (
@@ -157,14 +176,14 @@ export function Toolbar() {
       <ToolbarButton
         icon={Copy}
         tooltip="Duplicar (Ctrl+D)"
-        onClick={() => selectedElementId && duplicateElement(selectedElementId)}
-        disabled={!selectedElementId}
+        onClick={() => selectedElementIds.forEach(id => duplicateElement(id))}
+        disabled={!hasSelection}
       />
       <ToolbarButton
         icon={Trash2}
         tooltip="Deletar (Del)"
-        onClick={() => selectedElementId && deleteElement(selectedElementId)}
-        disabled={!selectedElementId}
+        onClick={() => selectedElementIds.forEach(id => deleteElement(id))}
+        disabled={!hasSelection}
         danger
       />
 
@@ -176,6 +195,7 @@ export function Toolbar() {
         {Math.round(canvasSettings.zoom * 100)}%
       </span>
       <ToolbarButton icon={ZoomIn} tooltip="Zoom +" onClick={() => handleZoom(0.1)} />
+      <ToolbarButton icon={Maximize} tooltip="Ajustar à tela" onClick={handleZoomToFit} />
 
       <Divider />
 
