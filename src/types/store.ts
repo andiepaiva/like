@@ -13,6 +13,7 @@ export interface AppStore {
   deleteElement: (id: string) => void
   deleteElements: (ids: string[]) => void
   duplicateElement: (id: string) => void
+  duplicateElements: (ids: string[]) => void
   moveElement: (id: string, newParentId: string, index: number) => void
   renameElement: (id: string, label: string) => void
 

@@ -159,6 +159,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })
   },
 
+  duplicateElements: (ids) => {
+    const { project } = get()
+    if (!project) return
+    const validIds = ids.filter(id => project.root.id !== id)
+    if (validIds.length === 0) return
+    get().pushHistory()
+    let newRoot = project.root
+    for (const id of validIds) {
+      const original = findElementById(newRoot, id)
+      if (!original) continue
+      const parent = findParentOf(newRoot, id)
+      if (!parent) continue
+      const clone = cloneSubtree(original, generateId)
+      clone.label = `${original.label} (cópia)`
+      const siblingIndex = parent.children.findIndex(c => c.id === id)
+      newRoot = insertNodeInTree(newRoot, parent.id, clone, siblingIndex + 1)
+    }
+    const now = new Date().toISOString()
+    set({
+      project: { ...project, updatedAt: now, root: newRoot },
+      isSaved: false,
+    })
+  },
+
   moveElement: (id, newParentId, index) => {
     const { project } = get()
     if (!project) return

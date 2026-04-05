@@ -39,8 +39,8 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
   const setProject = useAppStore(s => s.setProject)
   const undo = useAppStore(s => s.undo)
   const redo = useAppStore(s => s.redo)
-  const deleteElement = useAppStore(s => s.deleteElement)
-  const duplicateElement = useAppStore(s => s.duplicateElement)
+  const deleteElements = useAppStore(s => s.deleteElements)
+  const duplicateElements = useAppStore(s => s.duplicateElements)
   const selectedElementIds = useAppStore(s => s.selectedElementIds)
   const canvasSettings = useAppStore(s => s.canvasSettings)
   const updateCanvasSettings = useAppStore(s => s.updateCanvasSettings)
@@ -100,8 +100,8 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
         { type: 'action', label: 'Desfazer', icon: Undo2, shortcut: 'Ctrl+Z', onClick: () => { undo(); setOpenMenu(null) } },
         { type: 'action', label: 'Refazer', icon: Redo2, shortcut: 'Ctrl+Shift+Z', onClick: () => { redo(); setOpenMenu(null) } },
         { type: 'separator' },
-        { type: 'action', label: 'Duplicar', icon: Copy, shortcut: 'Ctrl+D', disabled: !hasSelection, onClick: () => { selectedElementIds.forEach(id => duplicateElement(id)); setOpenMenu(null) } },
-        { type: 'action', label: 'Excluir', icon: Trash2, shortcut: 'Del', disabled: !hasSelection, danger: true, onClick: () => { selectedElementIds.forEach(id => deleteElement(id)); setOpenMenu(null) } },
+        { type: 'action', label: 'Duplicar', icon: Copy, shortcut: 'Ctrl+D', disabled: !hasSelection, onClick: () => { duplicateElements(selectedElementIds); setOpenMenu(null) } },
+        { type: 'action', label: 'Excluir', icon: Trash2, shortcut: 'Del', disabled: !hasSelection, danger: true, onClick: () => { deleteElements(selectedElementIds); setOpenMenu(null) } },
       ],
     },
     {
