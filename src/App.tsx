@@ -11,8 +11,7 @@ function App() {
   const project = useAppStore(s => s.project)
   const setProject = useAppStore(s => s.setProject)
   const selectedElementIds = useAppStore(s => s.selectedElementIds)
-  const deleteElement = useAppStore(s => s.deleteElement)
-  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
+  const deleteElements = useAppStore(s => s.deleteElements)
   const [showVariables, setShowVariables] = useState(false)
 
   useEffect(() => {
@@ -31,13 +30,12 @@ function App() {
         const ids = useAppStore.getState().selectedElementIds
         if (ids.length === 0) return
         e.preventDefault()
-        ids.forEach(id => deleteElement(id))
-        setSelectedElementIds([])
+        deleteElements(ids)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteElement, setSelectedElementIds])
+  }, [deleteElements])
 
   if (!project) {
     return (

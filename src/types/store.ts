@@ -11,6 +11,7 @@ export interface AppStore {
   updateElementStylesSilent: (id: string, styles: Partial<CSSProperties>) => void
   insertElement: (parentId: string, element: ElementNode) => void
   deleteElement: (id: string) => void
+  deleteElements: (ids: string[]) => void
   duplicateElement: (id: string) => void
   moveElement: (id: string, newParentId: string, index: number) => void
   renameElement: (id: string, label: string) => void

@@ -107,6 +107,35 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })
   },
 
+  deleteElements: (ids) => {
+    const { project } = get()
+    if (!project) return
+    const idSet = new Set(ids)
+    idSet.delete(project.root.id)
+    if (idSet.size === 0) return
+    // Filtrar IDs cujo ancestral também está na seleção
+    const topLevel = [...idSet].filter(id => {
+      let parent = findParentOf(project.root, id)
+      while (parent) {
+        if (idSet.has(parent.id)) return false
+        parent = findParentOf(project.root, parent.id)
+      }
+      return true
+    })
+    if (topLevel.length === 0) return
+    get().pushHistory()
+    const now = new Date().toISOString()
+    let newRoot = project.root
+    for (const id of topLevel) {
+      newRoot = removeNodeFromTree(newRoot, id)
+    }
+    set({
+      project: { ...project, updatedAt: now, root: newRoot },
+      selectedElementIds: [],
+      isSaved: false,
+    })
+  },
+
   duplicateElement: (id) => {
     const { project } = get()
     if (!project) return

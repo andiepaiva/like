@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { useSelectedElement, useSelectedElements } from '@/hooks'
 import type { CSSProperties, HtmlTag } from '@/types'
@@ -197,13 +197,7 @@ export function PropertiesPanel() {
         {/* Nome do elemento */}
         <div className="flex items-center gap-2">
           <label className="text-[10px] text-editor-text-dim w-12 shrink-0">Nome</label>
-          <input
-            type="text"
-            value={element.label}
-            onChange={e => renameElement(element.id, e.target.value)}
-            className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none transition-colors truncate"
-            placeholder={element.tag}
-          />
+          <EditableName elementId={element.id} label={element.label} tag={element.tag} onRename={renameElement} />
         </div>
         {/* Classe CSS */}
         <div className="flex items-center gap-2">
@@ -229,13 +223,13 @@ export function PropertiesPanel() {
       <Section title="Alinhamento" icon={Move} defaultOpen>
         {/* Linha 1: Alinhar horizontal (margin-left/right auto) */}
         <div className="flex items-center gap-0.5">
-          <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => { handleStyleChange('marginLeft', '0'); handleStyleChange('marginRight', 'auto') }} active={element.styles.marginLeft === '0' && element.styles.marginRight === 'auto'} />
-          <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => { handleStyleChange('marginLeft', 'auto'); handleStyleChange('marginRight', 'auto') }} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === 'auto'} />
-          <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => { handleStyleChange('marginLeft', 'auto'); handleStyleChange('marginRight', '0') }} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === '0'} />
+          <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => updateElementStyles(element.id, { marginLeft: '0', marginRight: 'auto' })} active={element.styles.marginLeft === '0' && element.styles.marginRight === 'auto'} />
+          <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: 'auto' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === 'auto'} />
+          <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: '0' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === '0'} />
           <div className="w-px h-5 bg-editor-border mx-1" />
-          <AlignButton icon={AlignVerticalJustifyStart} tooltip="Alinhar ao topo" onClick={() => { handleStyleChange('marginTop', '0'); handleStyleChange('marginBottom', 'auto') }} active={element.styles.marginTop === '0' && element.styles.marginBottom === 'auto'} />
-          <AlignButton icon={AlignVerticalJustifyCenter} tooltip="Centralizar vertical" onClick={() => { handleStyleChange('marginTop', 'auto'); handleStyleChange('marginBottom', 'auto') }} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === 'auto'} />
-          <AlignButton icon={AlignVerticalJustifyEnd} tooltip="Alinhar à base" onClick={() => { handleStyleChange('marginTop', 'auto'); handleStyleChange('marginBottom', '0') }} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === '0'} />
+          <AlignButton icon={AlignVerticalJustifyStart} tooltip="Alinhar ao topo" onClick={() => updateElementStyles(element.id, { marginTop: '0', marginBottom: 'auto' })} active={element.styles.marginTop === '0' && element.styles.marginBottom === 'auto'} />
+          <AlignButton icon={AlignVerticalJustifyCenter} tooltip="Centralizar vertical" onClick={() => updateElementStyles(element.id, { marginTop: 'auto', marginBottom: 'auto' })} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === 'auto'} />
+          <AlignButton icon={AlignVerticalJustifyEnd} tooltip="Alinhar à base" onClick={() => updateElementStyles(element.id, { marginTop: 'auto', marginBottom: '0' })} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === '0'} />
         </div>
         {/* Linha 2: X, Y (posição absoluta) */}
         <div className="grid grid-cols-2 gap-1.5 mt-1.5">
@@ -262,7 +256,7 @@ export function PropertiesPanel() {
         {/* Linha 4: Rotação */}
         <div className="flex items-center gap-1.5 mt-1">
           <RotateCw size={12} className="text-editor-text-dim shrink-0" />
-          <input type="text" value={extractRotation(element.styles.transform)} onChange={e => handleStyleChange('transform', e.target.value ? `rotate(${e.target.value}deg)` : '')} className="w-16 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="0" />
+          <input type="text" value={extractRotation(element.styles.transform)} onChange={e => handleStyleChange('transform', composeRotation(element.styles.transform, e.target.value))} className="w-16 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="0" />
           <span className="text-[10px] text-editor-text-dim">deg</span>
         </div>
       </Section>
@@ -564,4 +558,27 @@ function extractRotation(transform?: string): string {
   const match = transform.match(/rotate\(([^)]+)\)/)
   if (!match) return '0'
   return match[1].replace('deg', '')
+}
+
+function composeRotation(existingTransform: string | undefined, degrees: string): string {
+  const withoutRotate = (existingTransform || '').replace(/\s*rotate\([^)]*\)/, '').trim()
+  if (!degrees || degrees === '0') return withoutRotate
+  const rotateStr = `rotate(${degrees}deg)`
+  return withoutRotate ? `${withoutRotate} ${rotateStr}` : rotateStr
+}
+
+function EditableName({ elementId, label, tag, onRename }: { elementId: string; label: string; tag: string; onRename: (id: string, name: string) => void }) {
+  const [local, setLocal] = useState(label)
+  useEffect(() => { setLocal(label) }, [elementId, label])
+  return (
+    <input
+      type="text"
+      value={local}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { if (local !== label) onRename(elementId, local) }}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none transition-colors truncate"
+      placeholder={tag}
+    />
+  )
 }
