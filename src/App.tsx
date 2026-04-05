@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAppStore, createEmptyProject } from '@/store'
 import { MenuBar } from '@/components/MenuBar'
 import { Toolbar } from '@/components/Toolbar'
@@ -6,19 +6,48 @@ import { LayersPanel } from '@/panels/layers/LayersPanel'
 import { PropertiesPanel } from '@/panels/properties/PropertiesPanel'
 import { VariablesPanel } from '@/panels/variables/VariablesPanel'
 import { Canvas } from '@/canvas/Canvas'
+import { loadProject, saveProject } from '@/services/persistence'
 
 function App() {
   const project = useAppStore(s => s.project)
   const setProject = useAppStore(s => s.setProject)
+  const markSaved = useAppStore(s => s.markSaved)
   const selectedElementIds = useAppStore(s => s.selectedElementIds)
   const deleteElements = useAppStore(s => s.deleteElements)
   const [showVariables, setShowVariables] = useState(false)
+  const [loading, setLoading] = useState(true)
 
+  // ─── Carregar do IndexedDB na inicialização ────────────────
   useEffect(() => {
-    if (!project) {
-      setProject(createEmptyProject())
-    }
-  }, [project, setProject])
+    loadProject()
+      .then(saved => {
+        if (saved) {
+          setProject(saved)
+          markSaved()
+        } else {
+          setProject(createEmptyProject())
+          markSaved()
+        }
+      })
+      .catch(() => {
+        setProject(createEmptyProject())
+        markSaved()
+      })
+      .finally(() => setLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Auto-save debounced ao IndexedDB ──────────────────────
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (loading || !project) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      saveProject(project).then(() => {
+        useAppStore.getState().markSaved()
+      }).catch(() => {})
+    }, 500)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  }, [project, loading])
 
   // ─── Atalho: Delete / Backspace apaga elementos selecionados ───
   useEffect(() => {
@@ -37,7 +66,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [deleteElements])
 
-  if (!project) {
+  if (loading || !project) {
     return (
       <div className="h-screen w-screen bg-editor-bg text-editor-text flex items-center justify-center">
         <p className="text-editor-text-dim">Carregando...</p>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import type { ElementNode, HtmlTag } from '@/types'
 import {
@@ -47,8 +47,45 @@ const TAG_ICONS: Partial<Record<HtmlTag, LucideIcon>> = {
   select: TextCursorInput,
 }
 
+// Ações extraídas uma vez — estáveis, sem re-subscription por nó
+type LayerActions = {
+  setSelectedElementIds: (ids: string[]) => void
+  toggleSelectedElement: (id: string) => void
+  deleteElement: (id: string) => void
+  duplicateElement: (id: string) => void
+  updateElement: (id: string, changes: Partial<ElementNode>) => void
+}
+
 export function LayersPanel() {
   const root = useAppStore(s => s.project?.root)
+  const selectedElementIds = useAppStore(s => s.selectedElementIds)
+
+  // Ações extraídas uma única vez (referências estáveis do Zustand)
+  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
+  const toggleSelectedElement = useAppStore(s => s.toggleSelectedElement)
+  const deleteElement = useAppStore(s => s.deleteElement)
+  const duplicateElement = useAppStore(s => s.duplicateElement)
+  const updateElement = useAppStore(s => s.updateElement)
+
+  // Estado de collapse global — sobrevive a re-renders e operações na árvore
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+
+  const toggleCollapse = useCallback((id: string) => {
+    setCollapsedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const actions: LayerActions = {
+    setSelectedElementIds,
+    toggleSelectedElement,
+    deleteElement,
+    duplicateElement,
+    updateElement,
+  }
 
   if (!root) return null
 
@@ -59,32 +96,60 @@ export function LayersPanel() {
         <span className="text-xs font-semibold text-editor-text-dim uppercase tracking-wider">Layers</span>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
-        <LayerNode node={root} depth={0} />
+        <LayerNode
+          node={root}
+          depth={0}
+          selectedElementIds={selectedElementIds}
+          collapsedIds={collapsedIds}
+          toggleCollapse={toggleCollapse}
+          actions={actions}
+        />
       </div>
     </div>
   )
 }
 
-function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
-  const selectedElementIds = useAppStore(s => s.selectedElementIds)
-  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
-  const toggleSelectedElement = useAppStore(s => s.toggleSelectedElement)
-  const deleteElement = useAppStore(s => s.deleteElement)
-  const duplicateElement = useAppStore(s => s.duplicateElement)
-  const updateElement = useAppStore(s => s.updateElement)
+function LayerNode({
+  node,
+  depth,
+  selectedElementIds,
+  collapsedIds,
+  toggleCollapse,
+  actions,
+}: {
+  node: ElementNode
+  depth: number
+  selectedElementIds: string[]
+  collapsedIds: Set<string>
+  toggleCollapse: (id: string) => void
+  actions: LayerActions
+}) {
   const isSelected = selectedElementIds.includes(node.id)
   const isRoot = depth === 0
-  const [collapsed, setCollapsed] = useState(false)
+  const collapsed = collapsedIds.has(node.id)
   const hasChildren = node.children.length > 0
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const Icon = TAG_ICONS[node.tag] || Square
 
   function handleClick(e: React.MouseEvent) {
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
-      toggleSelectedElement(node.id)
+      actions.toggleSelectedElement(node.id)
     } else {
-      setSelectedElementIds([node.id])
+      actions.setSelectedElementIds([node.id])
     }
+  }
+
+  function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (hasChildren && !confirmDelete) {
+      setConfirmDelete(true)
+      // Reset após 2s se o usuário não confirmar
+      setTimeout(() => setConfirmDelete(false), 2000)
+      return
+    }
+    setConfirmDelete(false)
+    actions.deleteElement(node.id)
   }
 
   return (
@@ -106,7 +171,7 @@ function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
             className="w-4 h-4 flex items-center justify-center shrink-0 text-editor-text-dim hover:text-editor-text"
             onClick={(e) => {
               e.stopPropagation()
-              setCollapsed(!collapsed)
+              toggleCollapse(node.id)
             }}
           >
             {collapsed
@@ -144,7 +209,7 @@ function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
               title={node.visible ? 'Ocultar' : 'Mostrar'}
               onClick={(e) => {
                 e.stopPropagation()
-                updateElement(node.id, { visible: !node.visible })
+                actions.updateElement(node.id, { visible: !node.visible })
               }}
             >
               {node.visible ? <Eye size={11} /> : <EyeOff size={11} />}
@@ -154,7 +219,7 @@ function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
               title={node.locked ? 'Desbloquear' : 'Bloquear'}
               onClick={(e) => {
                 e.stopPropagation()
-                updateElement(node.id, { locked: !node.locked })
+                actions.updateElement(node.id, { locked: !node.locked })
               }}
             >
               {node.locked ? <Lock size={11} /> : <Unlock size={11} />}
@@ -164,18 +229,19 @@ function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
               title="Duplicar"
               onClick={(e) => {
                 e.stopPropagation()
-                duplicateElement(node.id)
+                actions.duplicateElement(node.id)
               }}
             >
               <Copy size={11} />
             </button>
             <button
-              className="w-5 h-5 flex items-center justify-center rounded text-editor-text-dim hover:text-editor-danger hover:bg-editor-danger/10"
-              title="Deletar"
-              onClick={(e) => {
-                e.stopPropagation()
-                deleteElement(node.id)
-              }}
+              className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${
+                confirmDelete
+                  ? 'bg-editor-danger text-white'
+                  : 'text-editor-text-dim hover:text-editor-danger hover:bg-editor-danger/10'
+              }`}
+              title={confirmDelete ? 'Confirmar? (tem filhos)' : 'Deletar'}
+              onClick={handleDelete}
             >
               <Trash2 size={11} />
             </button>
@@ -185,7 +251,15 @@ function LayerNode({ node, depth }: { node: ElementNode; depth: number }) {
 
       {/* Filhos */}
       {!collapsed && node.children.map(child => (
-        <LayerNode key={child.id} node={child} depth={depth + 1} />
+        <LayerNode
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          selectedElementIds={selectedElementIds}
+          collapsedIds={collapsedIds}
+          toggleCollapse={toggleCollapse}
+          actions={actions}
+        />
       ))}
     </div>
   )

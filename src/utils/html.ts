@@ -35,9 +35,8 @@ export function serializeHTML(node: ElementNode, indent = 0): string {
   const pad = '  '.repeat(indent)
   const tag = node.tag
 
-  // Atributos
+  // Atributos (sem data-editor-id — atributo interno do editor)
   const attrs: string[] = []
-  attrs.push(`data-editor-id="${node.id}"`)
 
   if (node.className && node.className.length > 0) {
     attrs.push(`class="${node.className.join(' ')}"`)
@@ -106,8 +105,9 @@ function domToElementNode(el: HTMLElement): ElementNode | null {
   const id = el.getAttribute('data-editor-id') || generateId()
   const label = tag
 
-  // Parse styles do atributo style
-  const styles = parseInlineStyles(el.style)
+  // Parse styles do atributo style string (preserva valores originais)
+  const styleAttr = el.getAttribute('style') || ''
+  const styles = styleAttr ? parseStyleAttribute(styleAttr) : {} as CSSProperties
 
   // Parse className
   const classNames = el.className
@@ -123,18 +123,24 @@ function domToElementNode(el: HTMLElement): ElementNode | null {
     }
   }
 
-  // Parse filhos
+  // Parse filhos — inclui nós de texto misturados com elementos
   const children: ElementNode[] = []
-  for (const child of Array.from(el.children)) {
-    const childNode = domToElementNode(child as HTMLElement)
-    if (childNode) children.push(childNode)
+  let content: string | undefined
+  const textParts: string[] = []
+
+  for (const childNode of Array.from(el.childNodes)) {
+    if (childNode.nodeType === Node.ELEMENT_NODE) {
+      const childEl = domToElementNode(childNode as HTMLElement)
+      if (childEl) children.push(childEl)
+    } else if (childNode.nodeType === Node.TEXT_NODE) {
+      const text = childNode.textContent?.trim()
+      if (text) textParts.push(text)
+    }
   }
 
-  // Conteúdo de texto (somente se é tag de texto e não tem filhos-elemento)
-  let content: string | undefined
-  if (TEXT_TAGS.has(tag) && children.length === 0) {
-    const text = el.textContent?.trim()
-    if (text) content = text
+  // Conteúdo de texto: só se é tag de texto e não tem filhos-elemento
+  if (TEXT_TAGS.has(tag) && children.length === 0 && textParts.length > 0) {
+    content = textParts.join(' ')
   }
 
   const now = new Date().toISOString()
@@ -159,8 +165,25 @@ function parseInlineStyles(style: CSSStyleDeclaration): CSSProperties {
   for (let i = 0; i < style.length; i++) {
     const prop = style[i]
     if (!prop) continue
+    // Usar getPropertyValue — retorna o valor declarado, não o computado
     const value = style.getPropertyValue(prop)
     if (value) {
+      result[kebabToCamel(prop)] = value
+    }
+  }
+  return result
+}
+
+// Parse a partir do atributo style string (preserva valores originais do usuário)
+export function parseStyleAttribute(styleStr: string): CSSProperties {
+  const result: CSSProperties = {}
+  if (!styleStr) return result
+  for (const decl of styleStr.split(';')) {
+    const colonIdx = decl.indexOf(':')
+    if (colonIdx === -1) continue
+    const prop = decl.substring(0, colonIdx).trim()
+    const value = decl.substring(colonIdx + 1).trim()
+    if (prop && value) {
       result[kebabToCamel(prop)] = value
     }
   }

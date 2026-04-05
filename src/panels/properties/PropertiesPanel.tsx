@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId } from 'react'
 import { useAppStore } from '@/store'
 import { useSelectedElement, useSelectedElements } from '@/hooks'
 import type { CSSProperties, HtmlTag } from '@/types'
@@ -399,8 +399,6 @@ function Section({
 // ─── Componente de campo unificado ───────────────────────
 // Renderiza select, combo (datalist), color ou text conforme o tipo
 
-let comboIdCounter = 0
-
 function Field({
   field,
   value,
@@ -410,7 +408,7 @@ function Field({
   value: string
   onChange: (v: string) => void
 }) {
-  const [listId] = useState(() => `combo-${field.key}-${++comboIdCounter}`)
+  const listId = useId()
   const labelClass = field.compact ? 'w-10' : 'w-20'
 
   // ── Select puro ──
@@ -508,7 +506,7 @@ function Field({
 }
 
 function SpacingInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const [listId] = useState(() => `sp-${label}-${++comboIdCounter}`)
+  const listId = useId()
   return (
     <div className="flex flex-col items-center">
       <span className="text-[9px] text-editor-text-dim mb-0.5">{label}</span>
