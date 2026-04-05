@@ -27,6 +27,7 @@ interface AppStore {
   setProject: (project: Project) => void
   updateElement: (id: string, changes: Partial<ElementNode>) => void
   updateElementStyles: (id: string, styles: Partial<CSSProperties>) => void
+  updateElementStylesSilent: (id: string, styles: Partial<CSSProperties>) => void
   insertElement: (parentId: string, element: ElementNode) => void
   deleteElement: (id: string) => void
   duplicateElement: (id: string) => void
@@ -34,11 +35,13 @@ interface AppStore {
   renameElement: (id: string, label: string) => void
 
   // ─── Seleção ───────────────────────────────────────────────
-  selectedElementId: string | null
-  setSelectedElementId: (id: string | null) => void
+  selectedElementIds: string[]
+  setSelectedElementIds: (ids: string[]) => void
+  toggleSelectedElement: (id: string) => void
+  addSelectedElement: (id: string) => void
 
   // ─── Tokens e Estilos Globais ──────────────────────────────
-  addToken: (token: Token) => void
+  addToken: (category: 'colors' | 'typography' | 'spacing' | 'other', token: Token) => void
   updateToken: (id: string, changes: Partial<Token>) => void
   deleteToken: (id: string) => void
   addGlobalStyle: (style: GlobalStyle) => void
@@ -46,8 +49,8 @@ interface AppStore {
   deleteGlobalStyle: (id: string) => void
 
   // ─── Histórico (Undo/Redo) ─────────────────────────────────
-  history: Project[]
-  historyIndex: number
+  history: Project[]   // snapshots do passado
+  future: Project[]    // snapshots para redo
   pushHistory: () => void
   undo: () => void
   redo: () => void
@@ -97,7 +100,7 @@ updateElementStyles: (id, styles) => set(state => ({
 ### Histórico de undo
 `pushHistory` deve ser chamado **antes** de toda mutação destrutiva.
 Mutações destrutivas: insert, delete, move, updateStyles, rename, reorder.
-Mutações não-destrutivas (sem push): updateCanvasSettings (zoom, pan), setSyncStatus, setSelectedElementId.
+Mutações não-destrutivas (sem push): updateCanvasSettings (zoom, pan), setSyncStatus, setSelectedElementIds, updateElementStylesSilent.
 
 ```ts
 // Sequência obrigatória para toda action destrutiva:
@@ -129,13 +132,13 @@ const project = useAppStore(s => s.project)
 
 | Componente | O que observa |
 |---|---|
-| `Canvas` | `project.root`, `selectedElementId`, `canvasSettings` |
-| `LayersPanel` | `project.root`, `selectedElementId` |
-| `PropertiesPanel` | `selectedElementId` + elemento derivado de `project.root` |
-| `CodeEditor` | `project.root`, `project.tokens`, `project.styles`, `selectedElementId` |
-| `Toolbar` | `isSaved`, `syncStatus`, `canvasSettings.zoom` |
-| `TokensPanel` | `project.tokens` |
-| `StylesPanel` | `project.styles` |
+| `Canvas` | `project.root`, `selectedElementIds`, `setSelectedElementIds`, `toggleSelectedElement`, `canvasSettings`, `updateCanvasSettings` |
+| `LayersPanel` | `project.root`, `selectedElementIds`, `setSelectedElementIds`, `toggleSelectedElement`, `addSelectedElement` |
+| `PropertiesPanel` | `selectedElementIds` + elemento derivado de `project.root`, `updateElementStyles`, `renameElement`, `updateElement` |
+| `Toolbar` | `isSaved`, `canvasSettings`, `updateCanvasSettings`, `undo`, `redo`, `insertElement`, `deleteElement`, `duplicateElement` |
+| `MenuBar` | `canvasSettings`, `undo`, `redo`, `setProject` |
+| `VariablesPanel` | `project.tokens`, `addToken`, `updateToken`, `deleteToken` |
+| `SelectionOverlay` | `pushHistory`, `updateElementStylesSilent`, nó derivado de `project.root` |
 
 ---
 
@@ -148,9 +151,9 @@ Nunca armazenar o `ElementNode` selecionado diretamente no store — ele ficaria
 // Hook utilitário para obter o elemento selecionado atualizado
 function useSelectedElement(): ElementNode | null {
   const project = useAppStore(s => s.project)
-  const selectedElementId = useAppStore(s => s.selectedElementId)
-  if (!project || !selectedElementId) return null
-  return findElementById(project.root, selectedElementId)
+  const selectedElementIds = useAppStore(s => s.selectedElementIds)
+  if (!project || selectedElementIds.length === 0) return null
+  return findElementById(project.root, selectedElementIds[0])
 }
 ```
 

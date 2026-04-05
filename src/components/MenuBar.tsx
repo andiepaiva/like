@@ -62,11 +62,17 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
   function handleZoomToFit() {
     const artboardW = project?.canvas?.width ?? 1440
     const artboardH = project?.canvas?.height ?? 900
-    const viewW = window.innerWidth - 288 * 2
-    const viewH = window.innerHeight - 48 - 28 // toolbar + menubar
-    const zoom = Math.min(viewW / artboardW, viewH / artboardH) * 0.9
+    const panelW = 288
+    const toolbarH = 48 + 28
+    const viewW = window.innerWidth - panelW * 2
+    const viewH = window.innerHeight - toolbarH
+    const zoom = Math.min(viewW / artboardW, viewH / artboardH) * 0.85
     const clamped = Math.min(3, Math.max(0.25, Math.round(zoom * 100) / 100))
-    updateCanvasSettings({ zoom: clamped, offsetX: 0, offsetY: 0 })
+    const scaledW = artboardW * clamped
+    const scaledH = artboardH * clamped
+    const offsetX = (viewW - scaledW) / 2
+    const offsetY = (viewH - scaledH) / 2
+    updateCanvasSettings({ zoom: clamped, offsetX: Math.round(offsetX), offsetY: Math.round(offsetY) })
     setOpenMenu(null)
   }
 

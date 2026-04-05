@@ -12,7 +12,7 @@ export function Canvas() {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const artboardRef = useRef<HTMLDivElement>(null)
-  const interactionRef = useRef<'idle' | 'resizing' | 'panning'>('idle')
+  const interactionRef = useRef<'idle' | 'resizing' | 'panning' | 'dragging'>('idle')
 
   // Refs estáveis para pan — evitam que o useEffect re-attache listeners
   const panStateRef = useRef({
@@ -103,7 +103,7 @@ export function Canvas() {
     }
   }, []) // ← sem deps: registra listeners uma vez, usa refs para valores mutáveis
 
-  // Clique no fundo = deselecionar (APENAS se não acabamos de resize/pan)
+  // Clique no fundo = deselecionar — usa onClick (não mouseDown) para evitar race com pan
   function handleBackgroundClick(e: React.MouseEvent) {
     if (interactionRef.current !== 'idle') return
 
@@ -116,7 +116,7 @@ export function Canvas() {
     }
   }
 
-  const markInteraction = useCallback((type: 'idle' | 'resizing' | 'panning') => {
+  const markInteraction = useCallback((type: 'idle' | 'resizing' | 'panning' | 'dragging') => {
     interactionRef.current = type
   }, [])
 
@@ -125,19 +125,20 @@ export function Canvas() {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-hidden bg-editor-bg relative"
+      className="flex-1 overflow-hidden relative"
+      style={{ backgroundColor: '#2b2b3a' }}
       onWheel={handleWheel}
-      onMouseDown={handleBackgroundClick}
+      onClick={handleBackgroundClick}
     >
-      {/* Grid de fundo — linhas sutis (ativável pelo menu Exibir) */}
+      {/* Grid de fundo — linhas sutis (desligado por padrão, ativável pelo menu Exibir) */}
       {canvasSettings.showGrid && (
         <div
           data-canvas-bg
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage: `
-              linear-gradient(to right, rgba(128,128,128,0.06) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(128,128,128,0.06) 1px, transparent 1px)
+              linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
             `,
             backgroundSize: `${canvasSettings.gridSize * canvasSettings.zoom}px ${canvasSettings.gridSize * canvasSettings.zoom}px`,
             backgroundPosition: `${canvasSettings.offsetX % (canvasSettings.gridSize * canvasSettings.zoom)}px ${canvasSettings.offsetY % (canvasSettings.gridSize * canvasSettings.zoom)}px`,
@@ -171,6 +172,8 @@ export function Canvas() {
           <RenderNode
             node={root}
             selectedElementIds={selectedElementIds}
+            onSelect={setSelectedElementIds}
+            onToggle={toggleSelectedElement}
           />
         </div>
       </div>
@@ -195,18 +198,19 @@ export function Canvas() {
 }
 
 // ─── Renderizar nó da árvore como elemento HTML real ─────────
-// Sem overlay dentro do elemento — o overlay é renderizado fora do artboard
+// Callbacks recebidas do pai — sem subscribe no store por nó
 
 function RenderNode({
   node,
   selectedElementIds,
+  onSelect,
+  onToggle,
 }: {
   node: ElementNode
   selectedElementIds: string[]
+  onSelect: (ids: string[]) => void
+  onToggle: (id: string) => void
 }) {
-  const setSelectedElementIds = useAppStore(s => s.setSelectedElementIds)
-  const toggleSelectedElement = useAppStore(s => s.toggleSelectedElement)
-
   if (!node.visible) return null
 
   const Tag = node.tag as keyof React.JSX.IntrinsicElements
@@ -222,11 +226,10 @@ function RenderNode({
   function handleMouseDown(e: React.MouseEvent) {
     if (node.locked) return
     e.stopPropagation()
-    // Ctrl/Meta ou Shift = adicionar/remover da seleção
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
-      toggleSelectedElement(node.id)
+      onToggle(node.id)
     } else {
-      setSelectedElementIds([node.id])
+      onSelect([node.id])
     }
   }
 
@@ -255,6 +258,8 @@ function RenderNode({
           key={child.id}
           node={child}
           selectedElementIds={selectedElementIds}
+          onSelect={onSelect}
+          onToggle={onToggle}
         />
       ))}
     </Tag>
@@ -262,7 +267,8 @@ function RenderNode({
 }
 
 // ─── Selection Overlay — posicionado FORA do artboard ────────
-// Usa getBoundingClientRect do elemento real no DOM para posicionar handles
+// Usa getBoundingClientRect + ResizeObserver para posicionar handles
+// Suporta drag-to-move e resize com preservação de origem
 
 function SelectionOverlay({
   selectedElementId,
@@ -278,51 +284,51 @@ function SelectionOverlay({
   zoom: number
   offsetX: number
   offsetY: number
-  markInteraction: (type: 'idle' | 'resizing' | 'panning') => void
+  markInteraction: (type: 'idle' | 'resizing' | 'panning' | 'dragging') => void
   isPrimary: boolean
 }) {
-  const updateElementStyles = useAppStore(s => s.updateElementStyles)
+  const pushHistory = useAppStore(s => s.pushHistory)
+  const updateSilent = useAppStore(s => s.updateElementStylesSilent)
   const node = useAppStore(s => {
     if (!s.project) return null
     return findNodeById(s.project.root, selectedElementId)
   })
   const [rect, setRect] = useState<DOMRect | null>(null)
 
-  // Recalcular posição do overlay quando muda seleção, zoom, offset ou estilo do nó
+  // ─── Medir posição do elemento real no DOM ─────────────────
+  const measure = useCallback(() => {
+    const el = document.querySelector(`[data-editor-id="${selectedElementId}"]`) as HTMLElement | null
+    if (!el || !containerRef.current) { setRect(null); return }
+    const elRect = el.getBoundingClientRect()
+    const containerRect = containerRef.current.getBoundingClientRect()
+    setRect(new DOMRect(
+      elRect.x - containerRect.x,
+      elRect.y - containerRect.y,
+      elRect.width,
+      elRect.height,
+    ))
+  }, [selectedElementId, containerRef])
+
+  // Re-medir quando zoom/offset mudam
+  useEffect(() => { measure() }, [measure, zoom, offsetX, offsetY])
+
+  // ResizeObserver + MutationObserver para re-medir quando o elemento muda
   useEffect(() => {
     const el = document.querySelector(`[data-editor-id="${selectedElementId}"]`) as HTMLElement | null
-    if (!el || !containerRef.current) {
-      setRect(null)
-      return
-    }
+    if (!el) return
 
-    function measure() {
-      const elRect = el!.getBoundingClientRect()
-      const containerRect = containerRef.current!.getBoundingClientRect()
-      setRect(new DOMRect(
-        elRect.x - containerRect.x,
-        elRect.y - containerRect.y,
-        elRect.width,
-        elRect.height,
-      ))
-    }
+    const ro = new ResizeObserver(() => measure())
+    ro.observe(el)
 
-    measure()
+    const mo = new MutationObserver(() => measure())
+    mo.observe(el, { attributes: true, attributeFilter: ['style'] })
 
-    // Re-medir em cada frame enquanto estiver selecionado (cobre resize em andamento)
-    let raf: number
-    function loop() {
-      measure()
-      raf = requestAnimationFrame(loop)
-    }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
-  }, [selectedElementId, containerRef, zoom, offsetX, offsetY])
+    return () => { ro.disconnect(); mo.disconnect() }
+  }, [selectedElementId, measure])
 
   if (!rect || !node) return null
 
   const handleSize = 8
-  const outlineWidth = 2
 
   const handles = [
     { dir: 'nw', cursor: 'nw-resize', style: { top: -handleSize / 2, left: -handleSize / 2 } },
@@ -335,41 +341,106 @@ function SelectionOverlay({
     { dir: 'w', cursor: 'w-resize', style: { top: rect.height / 2 - handleSize / 2, left: -handleSize / 2 } },
   ]
 
+  // ─── Resize com preservação de origem ──────────────────────
   function handleResizeStart(direction: string) {
     return (e: React.MouseEvent) => {
       e.stopPropagation()
       e.preventDefault()
       markInteraction('resizing')
 
+      // Salvar histórico UMA VEZ antes do resize
+      pushHistory()
+
       const startX = e.clientX
       const startY = e.clientY
       const startW = parseInt(node!.styles.width || '0') || 0
       const startH = parseInt(node!.styles.height || '0') || 0
+      const startLeft = parseInt(node!.styles.left || '0') || 0
+      const startTop = parseInt(node!.styles.top || '0') || 0
 
       function onMove(ev: MouseEvent) {
         const dx = (ev.clientX - startX) / zoom
         const dy = (ev.clientY - startY) / zoom
         const changes: Record<string, string> = {}
 
-        if (direction.includes('e')) changes.width = `${Math.round(Math.max(16, startW + dx))}px`
-        if (direction.includes('w')) changes.width = `${Math.round(Math.max(16, startW - dx))}px`
-        if (direction.includes('s')) changes.height = `${Math.round(Math.max(16, startH + dy))}px`
-        if (direction.includes('n')) changes.height = `${Math.round(Math.max(16, startH - dy))}px`
+        // Resize para a direita: só atualiza width
+        if (direction.includes('e')) {
+          changes.width = `${Math.round(Math.max(16, startW + dx))}px`
+        }
+        // Resize para a esquerda: atualiza width E left (preserva borda direita)
+        if (direction.includes('w')) {
+          const newW = Math.max(16, startW - dx)
+          changes.width = `${Math.round(newW)}px`
+          if (node!.styles.position === 'absolute') {
+            changes.left = `${Math.round(startLeft + (startW - newW))}px`
+          }
+        }
+        // Resize para baixo: só atualiza height
+        if (direction.includes('s')) {
+          changes.height = `${Math.round(Math.max(16, startH + dy))}px`
+        }
+        // Resize para cima: atualiza height E top (preserva borda inferior)
+        if (direction.includes('n')) {
+          const newH = Math.max(16, startH - dy)
+          changes.height = `${Math.round(newH)}px`
+          if (node!.styles.position === 'absolute') {
+            changes.top = `${Math.round(startTop + (startH - newH))}px`
+          }
+        }
 
-        updateElementStyles(selectedElementId, changes)
+        // Silent — sem push no histórico
+        updateSilent(selectedElementId, changes)
       }
 
       function onUp() {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
-        requestAnimationFrame(() => {
-          markInteraction('idle')
-        })
+        requestAnimationFrame(() => markInteraction('idle'))
       }
 
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', onUp)
     }
+  }
+
+  // ─── Drag para mover ──────────────────────────────────────
+  function handleDragStart(e: React.MouseEvent) {
+    // Não interceptar handles de resize
+    if ((e.target as HTMLElement).dataset.resizeHandle) return
+    e.stopPropagation()
+    e.preventDefault()
+    markInteraction('dragging')
+
+    // Salvar histórico UMA VEZ antes do drag
+    pushHistory()
+
+    const startX = e.clientX
+    const startY = e.clientY
+    const startLeft = parseInt(node!.styles.left || '0') || 0
+    const startTop = parseInt(node!.styles.top || '0') || 0
+
+    // Se o elemento não é absolute, torná-lo
+    if (node!.styles.position !== 'absolute') {
+      updateSilent(selectedElementId, { position: 'absolute', left: '0px', top: '0px' })
+    }
+
+    function onMove(ev: MouseEvent) {
+      const dx = (ev.clientX - startX) / zoom
+      const dy = (ev.clientY - startY) / zoom
+      updateSilent(selectedElementId, {
+        left: `${Math.round(startLeft + dx)}px`,
+        top: `${Math.round(startTop + dy)}px`,
+      })
+    }
+
+    function onUp() {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      requestAnimationFrame(() => markInteraction('idle'))
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
 
   return (
@@ -381,13 +452,22 @@ function SelectionOverlay({
         width: rect.width,
         height: rect.height,
         zIndex: 9999,
-        outline: `${outlineWidth}px solid #3b82f6`,
+        outline: '2px solid #3b82f6',
         outlineOffset: '0px',
       }}
     >
+      {/* Área central arrastável para mover */}
+      {isPrimary && (
+        <div
+          className="absolute inset-0 pointer-events-auto cursor-move"
+          onMouseDown={handleDragStart}
+        />
+      )}
+      {/* Handles de resize */}
       {isPrimary && handles.map(h => (
         <div
           key={h.dir}
+          data-resize-handle
           className="absolute pointer-events-auto bg-white rounded-sm"
           style={{
             top: h.style.top,
@@ -395,7 +475,8 @@ function SelectionOverlay({
             width: handleSize,
             height: handleSize,
             cursor: h.cursor,
-            border: `${outlineWidth}px solid #3b82f6`,
+            border: '2px solid #3b82f6',
+            zIndex: 1,
           }}
           onMouseDown={handleResizeStart(h.dir)}
         />

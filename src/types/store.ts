@@ -8,6 +8,7 @@ export interface AppStore {
   setProject: (project: Project) => void
   updateElement: (id: string, changes: Partial<ElementNode>) => void
   updateElementStyles: (id: string, styles: Partial<CSSProperties>) => void
+  updateElementStylesSilent: (id: string, styles: Partial<CSSProperties>) => void
   insertElement: (parentId: string, element: ElementNode) => void
   deleteElement: (id: string) => void
   duplicateElement: (id: string) => void

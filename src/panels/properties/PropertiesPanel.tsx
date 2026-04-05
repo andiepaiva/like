@@ -227,31 +227,42 @@ export function PropertiesPanel() {
 
       {/* ─── Alinhamento (estilo Figma) ─── */}
       <Section title="Alinhamento" icon={Move} defaultOpen>
-        {/* Linha 1: Alinhar horizontal + vertical */}
+        {/* Linha 1: Alinhar horizontal (margin-left/right auto) */}
         <div className="flex items-center gap-0.5">
-          <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => handleStyleChange('alignSelf', 'flex-start')} active={element.styles.alignSelf === 'flex-start'} />
-          <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => handleStyleChange('alignSelf', 'center')} active={element.styles.alignSelf === 'center'} />
-          <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => handleStyleChange('alignSelf', 'flex-end')} active={element.styles.alignSelf === 'flex-end'} />
+          <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => { handleStyleChange('marginLeft', '0'); handleStyleChange('marginRight', 'auto') }} active={element.styles.marginLeft === '0' && element.styles.marginRight === 'auto'} />
+          <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => { handleStyleChange('marginLeft', 'auto'); handleStyleChange('marginRight', 'auto') }} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === 'auto'} />
+          <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => { handleStyleChange('marginLeft', 'auto'); handleStyleChange('marginRight', '0') }} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === '0'} />
           <div className="w-px h-5 bg-editor-border mx-1" />
-          <AlignButton icon={AlignVerticalJustifyStart} tooltip="Alinhar ao topo" onClick={() => handleStyleChange('alignSelf', 'flex-start')} active={false} />
-          <AlignButton icon={AlignVerticalJustifyCenter} tooltip="Centralizar vertical" onClick={() => handleStyleChange('alignSelf', 'center')} active={false} />
-          <AlignButton icon={AlignVerticalJustifyEnd} tooltip="Alinhar à base" onClick={() => handleStyleChange('alignSelf', 'flex-end')} active={false} />
+          <AlignButton icon={AlignVerticalJustifyStart} tooltip="Alinhar ao topo" onClick={() => { handleStyleChange('marginTop', '0'); handleStyleChange('marginBottom', 'auto') }} active={element.styles.marginTop === '0' && element.styles.marginBottom === 'auto'} />
+          <AlignButton icon={AlignVerticalJustifyCenter} tooltip="Centralizar vertical" onClick={() => { handleStyleChange('marginTop', 'auto'); handleStyleChange('marginBottom', 'auto') }} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === 'auto'} />
+          <AlignButton icon={AlignVerticalJustifyEnd} tooltip="Alinhar à base" onClick={() => { handleStyleChange('marginTop', 'auto'); handleStyleChange('marginBottom', '0') }} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === '0'} />
         </div>
-        {/* Linha 2: X, Y */}
+        {/* Linha 2: X, Y (posição absoluta) */}
         <div className="grid grid-cols-2 gap-1.5 mt-1.5">
           <div className="flex items-center gap-1.5">
             <label className="text-[10px] text-editor-text-dim w-4 shrink-0">X</label>
-            <input type="text" value={element.styles.left ?? '0'} onChange={e => handleStyleChange('left', e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" />
+            <input type="text" value={element.styles.left ?? ''} onChange={e => { if (e.target.value) handleStyleChange('position', 'absolute'); handleStyleChange('left', e.target.value) }} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
           </div>
           <div className="flex items-center gap-1.5">
             <label className="text-[10px] text-editor-text-dim w-4 shrink-0">Y</label>
-            <input type="text" value={element.styles.top ?? '0'} onChange={e => handleStyleChange('top', e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" />
+            <input type="text" value={element.styles.top ?? ''} onChange={e => { if (e.target.value) handleStyleChange('position', 'absolute'); handleStyleChange('top', e.target.value) }} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
           </div>
         </div>
-        {/* Linha 3: Rotação */}
-        <div className="flex items-center gap-1.5 mt-1.5">
+        {/* Linha 3: W, H inline (atalho rápido) */}
+        <div className="grid grid-cols-2 gap-1.5 mt-1">
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] text-editor-text-dim w-4 shrink-0">W</label>
+            <input type="text" value={element.styles.width ?? ''} onChange={e => handleStyleChange('width', e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] text-editor-text-dim w-4 shrink-0">H</label>
+            <input type="text" value={element.styles.height ?? ''} onChange={e => handleStyleChange('height', e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
+          </div>
+        </div>
+        {/* Linha 4: Rotação */}
+        <div className="flex items-center gap-1.5 mt-1">
           <RotateCw size={12} className="text-editor-text-dim shrink-0" />
-          <input type="text" value={extractRotation(element.styles.transform)} onChange={e => handleStyleChange('transform', `rotate(${e.target.value}deg)`)} className="w-16 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="0°" />
+          <input type="text" value={extractRotation(element.styles.transform)} onChange={e => handleStyleChange('transform', e.target.value ? `rotate(${e.target.value}deg)` : '')} className="w-16 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="0" />
           <span className="text-[10px] text-editor-text-dim">deg</span>
         </div>
       </Section>

@@ -56,6 +56,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })
   },
 
+  // Atualiza estilos SEM pushHistory — para uso em resize/drag frame-by-frame
+  updateElementStylesSilent: (id, styles) => {
+    const { project } = get()
+    if (!project) return
+    const now = new Date().toISOString()
+    set({
+      project: {
+        ...project,
+        updatedAt: now,
+        root: updateNodeInTree(project.root, id, node => ({
+          ...node,
+          styles: { ...node.styles, ...styles },
+          meta: { ...node.meta, updatedAt: now },
+        })),
+      },
+      isSaved: false,
+    })
+  },
+
   insertElement: (parentId, element) => {
     const { project } = get()
     if (!project) return
@@ -325,7 +344,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     offsetY: 0,
     width: 1440,
     height: 900,
-    showGrid: true,
+    showGrid: false,
     snapToGrid: true,
     gridSize: 8,
   },
