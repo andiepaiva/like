@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore, createEmptyProject } from '@/store'
+import { calculateZoomToFit } from '@/utils/zoom'
 import {
   FileText,
   Pencil,
@@ -66,13 +67,8 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
     const toolbarH = 48 + 28
     const viewW = window.innerWidth - panelW * 2
     const viewH = window.innerHeight - toolbarH
-    const zoom = Math.min(viewW / artboardW, viewH / artboardH) * 0.85
-    const clamped = Math.min(3, Math.max(0.25, Math.round(zoom * 100) / 100))
-    const scaledW = artboardW * clamped
-    const scaledH = artboardH * clamped
-    const offsetX = (viewW - scaledW) / 2
-    const offsetY = (viewH - scaledH) / 2
-    updateCanvasSettings({ zoom: clamped, offsetX: Math.round(offsetX), offsetY: Math.round(offsetY) })
+    const result = calculateZoomToFit(artboardW, artboardH, viewW, viewH)
+    updateCanvasSettings(result)
     setOpenMenu(null)
   }
 

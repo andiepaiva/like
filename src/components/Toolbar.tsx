@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import type { HtmlTag } from '@/types'
 import { generateId } from '@/utils'
+import { calculateZoomToFit } from '@/utils/zoom'
 import type { ElementNode } from '@/types'
 import {
   MousePointer2,
@@ -127,17 +128,8 @@ export function Toolbar() {
     const toolbarH = 48 + 28 // toolbar + menubar
     const viewW = window.innerWidth - panelW * 2
     const viewH = window.innerHeight - toolbarH
-    const zoom = Math.min(viewW / artboardW, viewH / artboardH) * 0.85
-    const clamped = Math.min(3, Math.max(0.25, Math.round(zoom * 100) / 100))
-    const scaledW = artboardW * clamped
-    const scaledH = artboardH * clamped
-    const offsetX = (viewW - scaledW) / 2
-    const offsetY = (viewH - scaledH) / 2
-    updateCanvasSettings({
-      zoom: clamped,
-      offsetX: Math.round(offsetX),
-      offsetY: Math.round(offsetY),
-    })
+    const result = calculateZoomToFit(artboardW, artboardH, viewW, viewH)
+    updateCanvasSettings(result)
   }
 
   return (
