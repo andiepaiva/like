@@ -81,3 +81,13 @@
 - **Por quê:** UX limpo — grid visual pode distrair. Usuário liga via Menu > Exibir > Mostrar grid quando precisa alinhar
 - **Consequências:** Canvas começa vazio de padrão, sem padrão visual
 - **Revisar quando:** Se feedback indicar que iniciantes esperam grid sempre visível
+
+---
+
+## DEC-009 — Scrubbing em campos numéricos: pushHistory 1× no mousedown
+
+- **Data:** 2026-04-05
+- **Decisão:** Campos numéricos do PropertiesPanel suportam scrubbing (arrastar no label). O padrão de histórico é o mesmo do resize/drag: `pushHistory()` uma vez no mousedown, `updateElementStylesSilent()` durante o mousemove.
+- **Por quê:** Scrubbing gera dezenas de frames por segundo. Um pushHistory por frame criaria centenas de snapshots no histórico, impossibilitando undo útil. O padrão já foi validado no SelectionOverlay.
+- **Consequências:** O PropertiesPanel precisa acessar `pushHistory` e `updateElementStylesSilent` do store. O valor é parseado para separar número de unidade (ex: `48px` → `48` + `px`). Shift multiplica o step por 10.
+- **Revisar quando:** Se for necessário snap-to-grid no scrubbing (adicionará lógica de snap ao incremento)

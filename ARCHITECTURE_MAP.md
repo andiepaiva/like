@@ -14,7 +14,7 @@
 | `RenderNode` | Renderiza ElementNode como HTML real. Sem subscribe no store — recebe callbacks via props | `src/canvas/Canvas.tsx` (interno) |
 | `SelectionOverlay` | Overlay fora do artboard: handles de resize (8 direções, preserva origem), drag-to-move, ResizeObserver+MutationObserver | `src/canvas/Canvas.tsx` (interno) |
 | `LayersPanel` | Árvore de camadas com multi-seleção, visibilidade, lock, duplicate, delete | `src/panels/layers/LayersPanel.tsx` |
-| `PropertiesPanel` | Editor CSS contextual: nome/classe, posição X/Y, W/H, rotation, spacing, border, alignment (margin auto), width presets | `src/panels/properties/PropertiesPanel.tsx` |
+| `PropertiesPanel` | Editor CSS contextual: nome/classe, posição X/Y, W/H, rotation, spacing, border, alignment (margin auto), width presets, scrubbing em campos numéricos | `src/panels/properties/PropertiesPanel.tsx` |
 | `VariablesPanel` | CRUD de design tokens (cores/tipografia/spacing/other), modal overlay | `src/panels/variables/VariablesPanel.tsx` |
 | `Toolbar` | Inserção de elementos, undo/redo, zoom controls, zoom-to-fit, ações de elemento | `src/components/Toolbar.tsx` |
 | `MenuBar` | Menus File/Edit/View — tema claro/escuro, grid toggle, zoom-to-fit, acesso ao painel de variáveis | `src/components/MenuBar.tsx` |
@@ -85,7 +85,7 @@ Store (Zustand)
   │    └── contém: RenderNode (props-only, zero subscriptions)
   │               SelectionOverlay (pushHistory 1x, updateElementStylesSilent N×)
   ├── LayersPanel ──── lê project.root, selectedElementIds │ escreve setSelectedElementIds
-  ├── PropertiesPanel ── lê selectedElementIds → deriva de project.root │ escreve updateElementStyles, renameElement
+  ├── PropertiesPanel ── lê selectedElementIds → deriva de project.root │ escreve updateElementStyles, renameElement, pushHistory+updateElementStylesSilent (scrubbing)
   ├── Toolbar ────── lê canvasSettings, isSaved │ escreve undo, redo, insertElement, deleteElement
   ├── MenuBar ────── lê canvasSettings │ escreve undo, redo, updateCanvasSettings, setProject
   ├── VariablesPanel ── lê project.tokens │ escreve addToken, updateToken, deleteToken
@@ -105,4 +105,4 @@ Store (Zustand)
 | 2026-04-05 | Fase B-C concluída: Canvas DOM-based, LayersPanel, PropertiesPanel, Toolbar |
 | 2026-04-05 | Features: MenuBar, VariablesPanel, tema claro/escuro, renomeação de elementos, alignment section |
 | 2026-04-05 | Audit de arquitetura: drag-to-move, history flooding fix (updateElementStylesSilent), resize com preservação de origem, RenderNode sem store subscriptions, RAF→Observer, deselect onClick, interactionRef expandido |
-| 2026-04-05 | Docs atualizados: STATE_SPEC (selectedElementIds, future[], updateElementStylesSilent), ARCHITECTURE_MAP (componentes reais, mapa de conexões) |
+| 2026-04-05 | Scrubbing em campos numéricos: NumberField, InlineScrubField, SpacingInput com pushHistory+updateElementStylesSilent |

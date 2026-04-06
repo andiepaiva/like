@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useSelectedElement, useSelectedElements } from '@/hooks'
 import type { CSSProperties, HtmlTag } from '@/types'
@@ -32,9 +32,12 @@ import type { LucideIcon } from 'lucide-react'
 type FieldDef = {
   key: keyof CSSProperties
   label: string
-  type?: 'select' | 'combo' | 'color'
+  type?: 'select' | 'combo' | 'color' | 'number'
   options?: string[]
   compact?: boolean
+  unit?: string    // unidade CSS para campos numéricos (ex: 'px', 'em')
+  min?: number     // valor mínimo para scrubbing (default: sem limite)
+  step?: number    // step base do scrubbing (default: 1)
 }
 
 // ─── Opções reutilizáveis ────────────────────────────────
@@ -46,43 +49,10 @@ const FONT_FAMILIES = [
   'system-ui', 'monospace', 'sans-serif', 'serif', 'cursive',
 ]
 
-const FONT_SIZES = [
-  '10px', '11px', '12px', '13px', '14px', '16px', '18px', '20px',
-  '24px', '28px', '32px', '36px', '40px', '48px', '56px', '64px', '72px', '96px',
-]
-
 const FONT_WEIGHTS = [
   '100', '200', '300', '400', '500', '600', '700', '800', '900',
 ]
 
-const LINE_HEIGHTS = [
-  'normal', '1', '1.25', '1.375', '1.5', '1.625', '1.75', '2', '2.5',
-]
-
-const LETTER_SPACINGS = [
-  'normal', '-0.05em', '-0.025em', '0', '0.025em', '0.05em', '0.1em', '0.2em',
-]
-
-const GAP_OPTIONS = [
-  '0', '2px', '4px', '6px', '8px', '10px', '12px', '16px', '20px', '24px', '32px', '40px', '48px',
-]
-
-const RADIUS_OPTIONS = [
-  '0', '2px', '4px', '6px', '8px', '12px', '16px', '24px', '9999px',
-]
-
-const OPACITY_OPTIONS = [
-  '0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1',
-]
-
-const SPACING_OPTIONS = [
-  '0', '2px', '4px', '6px', '8px', '10px', '12px', '16px', '20px', '24px', '32px', '40px', '48px', '64px',
-]
-
-const WIDTH_PRESETS = ['auto', '100%', '50%', 'fit-content']
-const HEIGHT_PRESETS = ['auto', '100%', '50%', 'fit-content']
-
-const BORDER_WIDTHS = ['0', '1px', '2px', '3px', '4px']
 const BORDER_STYLES = ['none', 'solid', 'dashed', 'dotted', 'double']
 
 // ─── Definições dos campos ───────────────────────────────
@@ -93,23 +63,23 @@ const LAYOUT_FIELDS: FieldDef[] = [
   { key: 'flexWrap', label: 'Wrap', type: 'select', options: ['nowrap', 'wrap', 'wrap-reverse'] },
   { key: 'justifyContent', label: 'Justify', type: 'select', options: ['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'] },
   { key: 'alignItems', label: 'Align', type: 'select', options: ['stretch', 'flex-start', 'center', 'flex-end', 'baseline'] },
-  { key: 'gap', label: 'Gap', type: 'combo', options: GAP_OPTIONS },
+  { key: 'gap', label: 'Gap', type: 'number', unit: 'px', min: 0 },
   { key: 'position', label: 'Position', type: 'select', options: ['static', 'relative', 'absolute', 'fixed', 'sticky'] },
 ]
 
 const DIMENSION_FIELDS: FieldDef[] = [
-  { key: 'width', label: 'W', type: 'combo', options: WIDTH_PRESETS, compact: true },
-  { key: 'height', label: 'H', type: 'combo', options: HEIGHT_PRESETS, compact: true },
-  { key: 'minWidth', label: 'Min W', compact: true },
-  { key: 'minHeight', label: 'Min H', compact: true },
-  { key: 'maxWidth', label: 'Max W', compact: true },
-  { key: 'maxHeight', label: 'Max H', compact: true },
+  { key: 'width', label: 'W', type: 'number', unit: 'px', min: 0, compact: true },
+  { key: 'height', label: 'H', type: 'number', unit: 'px', min: 0, compact: true },
+  { key: 'minWidth', label: 'Min W', type: 'number', unit: 'px', min: 0, compact: true },
+  { key: 'minHeight', label: 'Min H', type: 'number', unit: 'px', min: 0, compact: true },
+  { key: 'maxWidth', label: 'Max W', type: 'number', unit: 'px', min: 0, compact: true },
+  { key: 'maxHeight', label: 'Max H', type: 'number', unit: 'px', min: 0, compact: true },
 ]
 
 const APPEARANCE_FIELDS: FieldDef[] = [
   { key: 'backgroundColor', label: 'Fundo', type: 'color' },
-  { key: 'opacity', label: 'Opacidade', type: 'combo', options: OPACITY_OPTIONS },
-  { key: 'borderRadius', label: 'Radius', type: 'combo', options: RADIUS_OPTIONS },
+  { key: 'opacity', label: 'Opacidade', type: 'number', min: 0, step: 0.1 },
+  { key: 'borderRadius', label: 'Radius', type: 'number', unit: 'px', min: 0 },
   { key: 'boxShadow', label: 'Sombra' },
   { key: 'overflow', label: 'Overflow', type: 'select', options: ['visible', 'hidden', 'scroll', 'auto'] },
 ]
@@ -117,11 +87,11 @@ const APPEARANCE_FIELDS: FieldDef[] = [
 const TYPOGRAPHY_FIELDS: FieldDef[] = [
   { key: 'color', label: 'Cor', type: 'color' },
   { key: 'fontFamily', label: 'Família', type: 'select', options: FONT_FAMILIES },
-  { key: 'fontSize', label: 'Tamanho', type: 'combo', options: FONT_SIZES },
+  { key: 'fontSize', label: 'Tamanho', type: 'number', unit: 'px', min: 0 },
   { key: 'fontWeight', label: 'Peso', type: 'select', options: FONT_WEIGHTS },
   { key: 'fontStyle', label: 'Estilo', type: 'select', options: ['normal', 'italic', 'oblique'] },
-  { key: 'lineHeight', label: 'Altura L.', type: 'combo', options: LINE_HEIGHTS },
-  { key: 'letterSpacing', label: 'Espaço', type: 'combo', options: LETTER_SPACINGS },
+  { key: 'lineHeight', label: 'Altura L.', type: 'number', step: 0.1, min: 0 },
+  { key: 'letterSpacing', label: 'Espaço', type: 'number', unit: 'em', step: 0.01 },
   { key: 'textAlign', label: 'Alinhamento', type: 'select', options: ['left', 'center', 'right', 'justify'] },
   { key: 'verticalAlign', label: 'Alinhar V.', type: 'select', options: ['baseline', 'top', 'middle', 'bottom', 'text-top', 'text-bottom'] },
   { key: 'textDecoration', label: 'Decoração', type: 'select', options: ['none', 'underline', 'line-through', 'overline'] },
@@ -154,6 +124,8 @@ export function PropertiesPanel() {
   const element = useSelectedElement()
   const elements = useSelectedElements()
   const updateElementStyles = useAppStore(s => s.updateElementStyles)
+  const updateElementStylesSilent = useAppStore(s => s.updateElementStylesSilent)
+  const pushHistory = useAppStore(s => s.pushHistory)
   const updateElement = useAppStore(s => s.updateElement)
   const renameElement = useAppStore(s => s.renameElement)
 
@@ -185,6 +157,15 @@ export function PropertiesPanel() {
   function handleStyleChange(key: string, value: string) {
     if (!element) return
     updateElementStyles(element.id, { [key]: value || undefined })
+  }
+
+  function handleScrubStart() {
+    pushHistory()
+  }
+
+  function handleScrubMove(key: string, value: string) {
+    if (!element) return
+    updateElementStylesSilent(element.id, { [key]: value || undefined })
   }
 
   function handleContentChange(value: string) {
@@ -239,25 +220,13 @@ export function PropertiesPanel() {
         </div>
         {/* Linha 2: X, Y (posição absoluta) */}
         <div className="grid grid-cols-2 gap-1.5 mt-1.5">
-          <div className="flex items-center gap-1.5">
-            <label className="text-[10px] text-editor-text-dim w-4 shrink-0">X</label>
-            <input type="text" value={element.styles.left ?? ''} onChange={e => { if (e.target.value) handleStyleChange('position', 'absolute'); handleStyleChange('left', e.target.value) }} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-[10px] text-editor-text-dim w-4 shrink-0">Y</label>
-            <input type="text" value={element.styles.top ?? ''} onChange={e => { if (e.target.value) handleStyleChange('position', 'absolute'); handleStyleChange('top', e.target.value) }} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
-          </div>
+          <InlineScrubField label="X" value={element.styles.left ?? ''} unit="px" onChange={v => { if (v) handleStyleChange('position', 'absolute'); handleStyleChange('left', v) }} styleKey="left" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+          <InlineScrubField label="Y" value={element.styles.top ?? ''} unit="px" onChange={v => { if (v) handleStyleChange('position', 'absolute'); handleStyleChange('top', v) }} styleKey="top" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
         </div>
         {/* Linha 3: W, H inline (atalho rápido) */}
         <div className="grid grid-cols-2 gap-1.5 mt-1">
-          <div className="flex items-center gap-1.5">
-            <label className="text-[10px] text-editor-text-dim w-4 shrink-0">W</label>
-            <input type="text" value={element.styles.width ?? ''} onChange={e => handleStyleChange('width', e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-[10px] text-editor-text-dim w-4 shrink-0">H</label>
-            <input type="text" value={element.styles.height ?? ''} onChange={e => handleStyleChange('height', e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
-          </div>
+          <InlineScrubField label="W" value={element.styles.width ?? ''} unit="px" min={0} onChange={v => handleStyleChange('width', v)} styleKey="width" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+          <InlineScrubField label="H" value={element.styles.height ?? ''} unit="px" min={0} onChange={v => handleStyleChange('height', v)} styleKey="height" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
         </div>
         {/* Linha 4: Rotação */}
         <div className="flex items-center gap-1.5 mt-1">
@@ -283,7 +252,7 @@ export function PropertiesPanel() {
       {tagHasLayout(tag) && (
         <Section title="Layout" icon={LayoutGrid} defaultOpen>
           {LAYOUT_FIELDS.map(field => (
-            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} />
+            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
           ))}
         </Section>
       )}
@@ -307,7 +276,7 @@ export function PropertiesPanel() {
         </div>
         <div className="grid grid-cols-2 gap-1.5">
           {DIMENSION_FIELDS.map(field => (
-            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} />
+            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
           ))}
         </div>
       </Section>
@@ -319,20 +288,20 @@ export function PropertiesPanel() {
           <div>
             <div className="text-[10px] text-editor-text-dim mb-1 font-medium">Padding</div>
             <div className="grid grid-cols-4 gap-1">
-              <SpacingInput label="↑" value={element.styles.paddingTop ?? ''} onChange={v => handleStyleChange('paddingTop', v)} />
-              <SpacingInput label="→" value={element.styles.paddingRight ?? ''} onChange={v => handleStyleChange('paddingRight', v)} />
-              <SpacingInput label="↓" value={element.styles.paddingBottom ?? ''} onChange={v => handleStyleChange('paddingBottom', v)} />
-              <SpacingInput label="←" value={element.styles.paddingLeft ?? ''} onChange={v => handleStyleChange('paddingLeft', v)} />
+              <SpacingInput label="↑" value={element.styles.paddingTop ?? ''} onChange={v => handleStyleChange('paddingTop', v)} styleKey="paddingTop" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <SpacingInput label="→" value={element.styles.paddingRight ?? ''} onChange={v => handleStyleChange('paddingRight', v)} styleKey="paddingRight" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <SpacingInput label="↓" value={element.styles.paddingBottom ?? ''} onChange={v => handleStyleChange('paddingBottom', v)} styleKey="paddingBottom" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <SpacingInput label="←" value={element.styles.paddingLeft ?? ''} onChange={v => handleStyleChange('paddingLeft', v)} styleKey="paddingLeft" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
             </div>
           </div>
           {/* Margin */}
           <div>
             <div className="text-[10px] text-editor-text-dim mb-1 font-medium">Margin</div>
             <div className="grid grid-cols-4 gap-1">
-              <SpacingInput label="↑" value={element.styles.marginTop ?? ''} onChange={v => handleStyleChange('marginTop', v)} />
-              <SpacingInput label="→" value={element.styles.marginRight ?? ''} onChange={v => handleStyleChange('marginRight', v)} />
-              <SpacingInput label="↓" value={element.styles.marginBottom ?? ''} onChange={v => handleStyleChange('marginBottom', v)} />
-              <SpacingInput label="←" value={element.styles.marginLeft ?? ''} onChange={v => handleStyleChange('marginLeft', v)} />
+              <SpacingInput label="↑" value={element.styles.marginTop ?? ''} onChange={v => handleStyleChange('marginTop', v)} styleKey="marginTop" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <SpacingInput label="→" value={element.styles.marginRight ?? ''} onChange={v => handleStyleChange('marginRight', v)} styleKey="marginRight" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <SpacingInput label="↓" value={element.styles.marginBottom ?? ''} onChange={v => handleStyleChange('marginBottom', v)} styleKey="marginBottom" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <SpacingInput label="←" value={element.styles.marginLeft ?? ''} onChange={v => handleStyleChange('marginLeft', v)} styleKey="marginLeft" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
             </div>
           </div>
         </div>
@@ -340,14 +309,14 @@ export function PropertiesPanel() {
 
       <Section title="Aparência" icon={Paintbrush} defaultOpen>
         {APPEARANCE_FIELDS.map(field => (
-          <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} />
+          <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
         ))}
       </Section>
 
       {/* Border separada com width/style/color */}
       <Section title="Borda" icon={Maximize2}>
         <div className="flex flex-col gap-1.5">
-          <Field field={{ key: 'borderWidth', label: 'Espessura', type: 'combo', options: BORDER_WIDTHS }} value={element.styles.borderWidth ?? ''} onChange={v => handleStyleChange('borderWidth', v)} />
+          <Field field={{ key: 'borderWidth', label: 'Espessura', type: 'number', unit: 'px', min: 0 }} value={element.styles.borderWidth ?? ''} onChange={v => handleStyleChange('borderWidth', v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
           <Field field={{ key: 'borderStyle', label: 'Estilo', type: 'select', options: BORDER_STYLES }} value={element.styles.borderStyle ?? ''} onChange={v => handleStyleChange('borderStyle', v)} />
           <Field field={{ key: 'borderColor', label: 'Cor', type: 'color' }} value={element.styles.borderColor ?? ''} onChange={v => handleStyleChange('borderColor', v)} />
         </div>
@@ -356,7 +325,7 @@ export function PropertiesPanel() {
       {tagHasTypography(tag) && (
         <Section title="Tipografia" icon={Type} defaultOpen>
           {TYPOGRAPHY_FIELDS.map(field => (
-            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} />
+            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
           ))}
           {LIST_TAGS.has(tag) && (
             <Field field={{ key: 'listStyleType', label: 'Marcador', type: 'select', options: ['disc', 'circle', 'square', 'decimal', 'decimal-leading-zero', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman', 'none'] }} value={element.styles.listStyleType ?? ''} onChange={v => handleStyleChange('listStyleType', v)} />
@@ -412,10 +381,14 @@ function Field({
   field,
   value,
   onChange,
+  onScrubStart,
+  onScrubMove,
 }: {
   field: FieldDef
   value: string
   onChange: (v: string) => void
+  onScrubStart?: () => void
+  onScrubMove?: (key: string, value: string) => void
 }) {
   const listId = useId()
   const labelClass = field.compact ? 'w-10' : 'w-20'
@@ -499,6 +472,19 @@ function Field({
     )
   }
 
+  // ── Number field com scrubbing ──
+  if (field.type === 'number') {
+    return (
+      <NumberField
+        field={field}
+        value={value}
+        onChange={onChange}
+        onScrubStart={onScrubStart}
+        onScrubMove={onScrubMove}
+      />
+    )
+  }
+
   // ── Input de texto padrão ──
   return (
     <div className="flex items-center gap-2">
@@ -514,24 +500,216 @@ function Field({
   )
 }
 
-function SpacingInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const listId = useId()
+// ─── Helpers de parsing numérico ─────────────────────────
+function parseNumericValue(raw: string, defaultUnit: string): { num: number; unit: string } {
+  if (!raw) return { num: 0, unit: defaultUnit }
+  const match = raw.match(/^(-?[\d.]+)\s*(.*)$/)
+  if (!match) return { num: 0, unit: defaultUnit }
+  return { num: parseFloat(match[1]) || 0, unit: match[2] || defaultUnit }
+}
+
+function formatNumericValue(num: number, unit: string, step: number): string {
+  // Para steps fracionários, arredondar para evitar floating-point noise
+  const decimals = step < 1 ? Math.max(1, -Math.floor(Math.log10(step))) : 0
+  const formatted = decimals > 0 ? num.toFixed(decimals) : String(Math.round(num))
+  return unit ? `${formatted}${unit}` : formatted
+}
+
+// ─── Campo numérico com scrubbing no label ───────────────
+function NumberField({
+  field,
+  value,
+  onChange,
+  onScrubStart,
+  onScrubMove,
+}: {
+  field: FieldDef
+  value: string
+  onChange: (v: string) => void
+  onScrubStart?: () => void
+  onScrubMove?: (key: string, value: string) => void
+}) {
+  const labelClass = field.compact ? 'w-10' : 'w-20'
+  const unit = field.unit ?? ''
+  const step = field.step ?? 1
+  const scrubRef = useRef<{ startX: number; startVal: number } | null>(null)
+
+  function handleLabelMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    const { num } = parseNumericValue(value, unit)
+    scrubRef.current = { startX: e.clientX, startVal: num }
+
+    // pushHistory uma única vez antes de iniciar o scrub
+    onScrubStart?.()
+
+    function onMove(ev: MouseEvent) {
+      if (!scrubRef.current) return
+      const dx = ev.clientX - scrubRef.current.startX
+      const multiplier = ev.shiftKey ? 10 : 1
+      let newVal = scrubRef.current.startVal + dx * step * multiplier
+      if (field.min !== undefined) newVal = Math.max(field.min, newVal)
+      const formatted = formatNumericValue(newVal, unit, step)
+      // Silent update durante o scrub
+      if (onScrubMove) {
+        onScrubMove(field.key, formatted)
+      } else {
+        onChange(formatted)
+      }
+    }
+
+    function onUp(ev: MouseEvent) {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      if (!scrubRef.current) return
+      // Commit final com o valor que já foi aplicado via silent
+      const dx = ev.clientX - scrubRef.current.startX
+      const multiplier = ev.shiftKey ? 10 : 1
+      let newVal = scrubRef.current.startVal + dx * step * multiplier
+      if (field.min !== undefined) newVal = Math.max(field.min, newVal)
+      scrubRef.current = null
+      // Se não houve movimento, não fazer nada (click no label)
+      if (Math.abs(dx) < 2) return
+      onChange(formatNumericValue(newVal, unit, step))
+    }
+
+    document.body.style.cursor = 'ew-resize'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
   return (
-    <div className="flex flex-col items-center">
-      <span className="text-[9px] text-editor-text-dim mb-0.5">{label}</span>
+    <div className="flex items-center gap-2">
+      <label
+        className={`text-[10px] text-editor-text-dim ${labelClass} shrink-0 cursor-ew-resize select-none`}
+        onMouseDown={handleLabelMouseDown}
+      >
+        {field.label}
+      </label>
       <input
         type="text"
-        list={listId}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none transition-colors truncate"
+        placeholder={unit ? `0${unit}` : '0'}
+      />
+    </div>
+  )
+}
+
+// ─── Campo inline compacto com scrubbing (X, Y, W, H) ───
+function InlineScrubField({ label, value, unit, min, onChange, styleKey, onScrubStart, onScrubMove }: {
+  label: string; value: string; unit: string; min?: number
+  onChange: (v: string) => void; styleKey: string
+  onScrubStart?: () => void; onScrubMove?: (key: string, value: string) => void
+}) {
+  const scrubRef = useRef<{ startX: number; startVal: number } | null>(null)
+
+  function handleLabelMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    const { num } = parseNumericValue(value, unit)
+    scrubRef.current = { startX: e.clientX, startVal: num }
+    onScrubStart?.()
+
+    function onMove(ev: MouseEvent) {
+      if (!scrubRef.current) return
+      const dx = ev.clientX - scrubRef.current.startX
+      const multiplier = ev.shiftKey ? 10 : 1
+      let newVal = scrubRef.current.startVal + dx * multiplier
+      if (min !== undefined) newVal = Math.max(min, newVal)
+      const formatted = `${Math.round(newVal)}${unit}`
+      if (onScrubMove) {
+        onScrubMove(styleKey, formatted)
+      } else {
+        onChange(formatted)
+      }
+    }
+
+    function onUp(ev: MouseEvent) {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      if (!scrubRef.current) return
+      const dx = ev.clientX - scrubRef.current.startX
+      const multiplier = ev.shiftKey ? 10 : 1
+      let newVal = scrubRef.current.startVal + dx * multiplier
+      if (min !== undefined) newVal = Math.max(min, newVal)
+      scrubRef.current = null
+      if (Math.abs(dx) < 2) return
+      onChange(`${Math.round(newVal)}${unit}`)
+    }
+
+    document.body.style.cursor = 'ew-resize'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <label className="text-[10px] text-editor-text-dim w-4 shrink-0 cursor-ew-resize select-none" onMouseDown={handleLabelMouseDown}>{label}</label>
+      <input type="text" value={value} onChange={e => onChange(e.target.value)} className="flex-1 min-w-0 bg-editor-bg text-editor-text text-[11px] px-2 py-1 rounded-md border border-editor-border focus:border-editor-accent focus:outline-none" placeholder="auto" />
+    </div>
+  )
+}
+
+function SpacingInput({ label, value, onChange, onScrubStart, onScrubMove, styleKey }: {
+  label: string; value: string; onChange: (v: string) => void
+  onScrubStart?: () => void; onScrubMove?: (key: string, value: string) => void; styleKey?: string
+}) {
+  const scrubRef = useRef<{ startX: number; startVal: number } | null>(null)
+
+  function handleLabelMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    const { num } = parseNumericValue(value, 'px')
+    scrubRef.current = { startX: e.clientX, startVal: num }
+    onScrubStart?.()
+
+    function onMove(ev: MouseEvent) {
+      if (!scrubRef.current) return
+      const dx = ev.clientX - scrubRef.current.startX
+      const multiplier = ev.shiftKey ? 10 : 1
+      const newVal = Math.max(0, scrubRef.current.startVal + dx * multiplier)
+      const formatted = `${Math.round(newVal)}px`
+      if (onScrubMove && styleKey) {
+        onScrubMove(styleKey, formatted)
+      } else {
+        onChange(formatted)
+      }
+    }
+
+    function onUp(ev: MouseEvent) {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      if (!scrubRef.current) return
+      const dx = ev.clientX - scrubRef.current.startX
+      const multiplier = ev.shiftKey ? 10 : 1
+      const newVal = Math.max(0, scrubRef.current.startVal + dx * multiplier)
+      scrubRef.current = null
+      if (Math.abs(dx) < 2) return
+      onChange(`${Math.round(newVal)}px`)
+    }
+
+    document.body.style.cursor = 'ew-resize'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <span
+        className="text-[9px] text-editor-text-dim mb-0.5 cursor-ew-resize select-none"
+        onMouseDown={handleLabelMouseDown}
+      >
+        {label}
+      </span>
+      <input
+        type="text"
         value={value}
         onChange={e => onChange(e.target.value)}
         className="w-full bg-editor-bg text-editor-text text-[10px] px-1 py-0.5 rounded border border-editor-border focus:border-editor-accent focus:outline-none text-center"
         placeholder="0"
       />
-      <datalist id={listId}>
-        {SPACING_OPTIONS.map(opt => (
-          <option key={opt} value={opt} />
-        ))}
-      </datalist>
     </div>
   )
 }
