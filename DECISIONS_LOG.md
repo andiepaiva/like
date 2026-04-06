@@ -91,3 +91,16 @@
 - **Por quê:** Scrubbing gera dezenas de frames por segundo. Um pushHistory por frame criaria centenas de snapshots no histórico, impossibilitando undo útil. O padrão já foi validado no SelectionOverlay.
 - **Consequências:** O PropertiesPanel precisa acessar `pushHistory` e `updateElementStylesSilent` do store. O valor é parseado para separar número de unidade (ex: `48px` → `48` + `px`). Shift multiplica o step por 10.
 - **Revisar quando:** Se for necessário snap-to-grid no scrubbing (adicionará lógica de snap ao incremento)
+
+---
+
+## DEC-010 — Alinhamento context-aware baseado no display do pai
+
+- **Data:** 2026-04-05
+- **Decisão:** Os botões de alinhamento (horizontal/vertical) no PropertiesPanel detectam o `display` do elemento pai via `findParentOf` e aplicam a propriedade CSS correta para cada contexto:
+  - **Flex:** `alignSelf` (eixo cruzado); eixo principal controlado por `justifyContent` do pai
+  - **Grid:** `justifySelf` (horizontal) e `alignSelf` (vertical)
+  - **Block/fallback:** `margin-left/right: auto` (horizontal); vertical desabilitado
+- **Por quê:** Antes, os botões sempre usavam `margin: auto`, que só funciona em bloco. Em flex/grid o mecanismo correto é `alignSelf`/`justifySelf`.
+- **Consequências:** `findParentOf` é chamado no render do componente (AP-01 ok — é util pura, sem mutation). Botões de alinhamento vertical ficam desabilitados em contexto block. Ao trocar de contexto, as propriedades anteriores podem ficar residuais (aceito no MVP — ser explicito é melhor que mágica).
+- **Revisar quando:** Se necessário limpar props do contexto anterior ao aplicar novo alinhamento

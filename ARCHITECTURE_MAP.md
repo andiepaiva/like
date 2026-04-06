@@ -14,7 +14,7 @@
 | `RenderNode` | Renderiza ElementNode como HTML real. Sem subscribe no store — recebe callbacks via props | `src/canvas/Canvas.tsx` (interno) |
 | `SelectionOverlay` | Overlay fora do artboard: handles de resize (8 direções, preserva origem), drag-to-move, ResizeObserver+MutationObserver | `src/canvas/Canvas.tsx` (interno) |
 | `LayersPanel` | Árvore de camadas com multi-seleção, visibilidade, lock, duplicate, delete | `src/panels/layers/LayersPanel.tsx` |
-| `PropertiesPanel` | Editor CSS contextual: nome/classe, posição X/Y, W/H, rotation, spacing, border, alignment (margin auto), width presets, scrubbing em campos numéricos | `src/panels/properties/PropertiesPanel.tsx` |
+| `PropertiesPanel` | Editor CSS contextual: nome/classe, posição X/Y, W/H, rotation, spacing, border, alinhamento context-aware (flex/grid/block), tipografia 2-col grid com textAlign icon buttons, layout com flexDirection icon buttons, scrubbing em campos numéricos | `src/panels/properties/PropertiesPanel.tsx` |
 | `VariablesPanel` | CRUD de design tokens (cores/tipografia/spacing/other), modal overlay | `src/panels/variables/VariablesPanel.tsx` |
 | `Toolbar` | Inserção de elementos, undo/redo, zoom controls, zoom-to-fit, ações de elemento | `src/components/Toolbar.tsx` |
 | `MenuBar` | Menus File/Edit/View — tema claro/escuro, grid toggle, zoom-to-fit, acesso ao painel de variáveis | `src/components/MenuBar.tsx` |
@@ -106,3 +106,4 @@ Store (Zustand)
 | 2026-04-05 | Features: MenuBar, VariablesPanel, tema claro/escuro, renomeação de elementos, alignment section |
 | 2026-04-05 | Audit de arquitetura: drag-to-move, history flooding fix (updateElementStylesSilent), resize com preservação de origem, RenderNode sem store subscriptions, RAF→Observer, deselect onClick, interactionRef expandido |
 | 2026-04-05 | Scrubbing em campos numéricos: NumberField, InlineScrubField, SpacingInput com pushHistory+updateElementStylesSilent |
+| 2026-04-05 | PropertiesPanel redesign: tipografia 2-col grid, textAlign icon buttons, flexDirection icon buttons, alinhamento context-aware (flex alignSelf, grid justifySelf/alignSelf, block margin auto), presets removidos, labels compactos |

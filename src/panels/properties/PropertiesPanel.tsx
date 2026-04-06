@@ -1,6 +1,7 @@
-import { useState, useEffect, useId, useRef } from 'react'
+import { useState, useEffect, useId, useRef, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useSelectedElement, useSelectedElements } from '@/hooks'
+import { findParentOf } from '@/utils'
 import type { CSSProperties, HtmlTag } from '@/types'
 import {
   Settings2,
@@ -25,6 +26,14 @@ import {
   AlignVerticalSpaceBetween,
   Move,
   RotateCw,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  ArrowRight,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -78,7 +87,7 @@ const DIMENSION_FIELDS: FieldDef[] = [
 
 const APPEARANCE_FIELDS: FieldDef[] = [
   { key: 'backgroundColor', label: 'Fundo', type: 'color' },
-  { key: 'opacity', label: 'Opacidade', type: 'number', min: 0, step: 0.1 },
+  { key: 'opacity', label: 'Opac.', type: 'number', min: 0, step: 0.1 },
   { key: 'borderRadius', label: 'Radius', type: 'number', unit: 'px', min: 0 },
   { key: 'boxShadow', label: 'Sombra' },
   { key: 'overflow', label: 'Overflow', type: 'select', options: ['visible', 'hidden', 'scroll', 'auto'] },
@@ -92,12 +101,31 @@ const TYPOGRAPHY_FIELDS: FieldDef[] = [
   { key: 'fontStyle', label: 'Estilo', type: 'select', options: ['normal', 'italic', 'oblique'] },
   { key: 'lineHeight', label: 'Altura L.', type: 'number', step: 0.1, min: 0 },
   { key: 'letterSpacing', label: 'Espaço', type: 'number', unit: 'em', step: 0.01 },
-  { key: 'textAlign', label: 'Alinhamento', type: 'select', options: ['left', 'center', 'right', 'justify'] },
   { key: 'verticalAlign', label: 'Alinhar V.', type: 'select', options: ['baseline', 'top', 'middle', 'bottom', 'text-top', 'text-bottom'] },
   { key: 'textDecoration', label: 'Decoração', type: 'select', options: ['none', 'underline', 'line-through', 'overline'] },
   { key: 'textTransform', label: 'Caixa', type: 'select', options: ['none', 'uppercase', 'lowercase', 'capitalize'] },
   { key: 'whiteSpace', label: 'Quebra', type: 'select', options: ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line'] },
   { key: 'textOverflow', label: 'Truncar', type: 'select', options: ['clip', 'ellipsis'] },
+]
+
+// Campos de tipografia agrupados em 2 colunas
+const TYPO_ROW_2COL: [FieldDef, FieldDef][] = [
+  [
+    { key: 'fontSize', label: 'Tamanho', type: 'number', unit: 'px', min: 0, compact: true },
+    { key: 'fontWeight', label: 'Peso', type: 'select', options: FONT_WEIGHTS, compact: true },
+  ],
+  [
+    { key: 'lineHeight', label: 'Altura L.', type: 'number', step: 0.1, min: 0, compact: true },
+    { key: 'letterSpacing', label: 'Espaço', type: 'number', unit: 'em', step: 0.01, compact: true },
+  ],
+  [
+    { key: 'fontStyle', label: 'Estilo', type: 'select', options: ['normal', 'italic', 'oblique'], compact: true },
+    { key: 'textTransform', label: 'Caixa', type: 'select', options: ['none', 'uppercase', 'lowercase', 'capitalize'], compact: true },
+  ],
+  [
+    { key: 'textDecoration', label: 'Decoração', type: 'select', options: ['none', 'underline', 'line-through', 'overline'], compact: true },
+    { key: 'whiteSpace', label: 'Quebra', type: 'select', options: ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line'], compact: true },
+  ],
 ]
 
 // ─── Tags que suportam cada seção ────────────────────────
@@ -153,6 +181,18 @@ export function PropertiesPanel() {
 
   if (!element) return null
   const tag = element.tag
+  const root = useAppStore(s => s.project?.root)
+
+  // Detectar contexto do pai para alinhamento
+  const parentContext = useMemo(() => {
+    if (!root) return { display: 'block' as string, flexDir: '' as string }
+    const parent = findParentOf(root, element.id)
+    if (!parent) return { display: 'block', flexDir: '' }
+    return {
+      display: parent.styles.display ?? 'block',
+      flexDir: parent.styles.flexDirection ?? 'row',
+    }
+  }, [root, element.id])
 
   function handleStyleChange(key: string, value: string) {
     if (!element) return
@@ -206,18 +246,61 @@ export function PropertiesPanel() {
         </div>
       </div>
 
-      {/* ─── Alinhamento (estilo Figma) ─── */}
+      {/* ─── Alinhamento (context-aware) ─── */}
       <Section title="Alinhamento" icon={Move} defaultOpen>
-        {/* Linha 1: Alinhar horizontal (margin-left/right auto) */}
-        <div className="flex items-center gap-0.5">
-          <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => updateElementStyles(element.id, { marginLeft: '0', marginRight: 'auto' })} active={element.styles.marginLeft === '0' && element.styles.marginRight === 'auto'} />
-          <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: 'auto' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === 'auto'} />
-          <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: '0' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === '0'} />
-          <div className="w-px h-5 bg-editor-border mx-1" />
-          <AlignButton icon={AlignVerticalJustifyStart} tooltip="Alinhar ao topo" onClick={() => updateElementStyles(element.id, { marginTop: '0', marginBottom: 'auto' })} active={element.styles.marginTop === '0' && element.styles.marginBottom === 'auto'} />
-          <AlignButton icon={AlignVerticalJustifyCenter} tooltip="Centralizar vertical" onClick={() => updateElementStyles(element.id, { marginTop: 'auto', marginBottom: 'auto' })} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === 'auto'} />
-          <AlignButton icon={AlignVerticalJustifyEnd} tooltip="Alinhar à base" onClick={() => updateElementStyles(element.id, { marginTop: 'auto', marginBottom: '0' })} active={element.styles.marginTop === 'auto' && element.styles.marginBottom === '0'} />
-        </div>
+        {/* Botões de alinhamento baseados no contexto do pai */}
+        {(() => {
+          const isFlex = parentContext.display === 'flex' || parentContext.display === 'inline-flex'
+          const isGrid = parentContext.display === 'grid'
+          const isRow = parentContext.flexDir === 'row' || parentContext.flexDir === 'row-reverse'
+
+          // ── Flex context ──
+          if (isFlex) {
+            // No flex, o eixo cruzado usa alignSelf
+            // Eixo principal: controlado por justifyContent do pai (não pelo filho)
+            const crossAxisLabel = isRow ? 'Vertical' : 'Horizontal'
+            const crossVal = element.styles.alignSelf ?? ''
+            return (
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-editor-text-dim mr-1">{crossAxisLabel}</span>
+                <AlignButton icon={isRow ? AlignVerticalJustifyStart : AlignHorizontalJustifyStart} tooltip="flex-start" onClick={() => updateElementStyles(element.id, { alignSelf: 'flex-start' })} active={crossVal === 'flex-start'} />
+                <AlignButton icon={isRow ? AlignVerticalJustifyCenter : AlignHorizontalJustifyCenter} tooltip="center" onClick={() => updateElementStyles(element.id, { alignSelf: 'center' })} active={crossVal === 'center'} />
+                <AlignButton icon={isRow ? AlignVerticalJustifyEnd : AlignHorizontalJustifyEnd} tooltip="flex-end" onClick={() => updateElementStyles(element.id, { alignSelf: 'flex-end' })} active={crossVal === 'flex-end'} />
+                <AlignButton icon={isRow ? AlignVerticalSpaceBetween : AlignHorizontalSpaceBetween} tooltip="stretch" onClick={() => updateElementStyles(element.id, { alignSelf: 'stretch' })} active={crossVal === 'stretch'} />
+              </div>
+            )
+          }
+
+          // ── Grid context ──
+          if (isGrid) {
+            const hVal = (element.styles as Record<string, string | undefined>).justifySelf ?? ''
+            const vVal = element.styles.alignSelf ?? ''
+            return (
+              <>
+                <div className="flex items-center gap-0.5">
+                  <AlignButton icon={AlignHorizontalJustifyStart} tooltip="justify-self: start" onClick={() => updateElementStyles(element.id, { justifySelf: 'start' } as any)} active={hVal === 'start'} />
+                  <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="justify-self: center" onClick={() => updateElementStyles(element.id, { justifySelf: 'center' } as any)} active={hVal === 'center'} />
+                  <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="justify-self: end" onClick={() => updateElementStyles(element.id, { justifySelf: 'end' } as any)} active={hVal === 'end'} />
+                  <div className="w-px h-5 bg-editor-border mx-1" />
+                  <AlignButton icon={AlignVerticalJustifyStart} tooltip="align-self: start" onClick={() => updateElementStyles(element.id, { alignSelf: 'start' })} active={vVal === 'start'} />
+                  <AlignButton icon={AlignVerticalJustifyCenter} tooltip="align-self: center" onClick={() => updateElementStyles(element.id, { alignSelf: 'center' })} active={vVal === 'center'} />
+                  <AlignButton icon={AlignVerticalJustifyEnd} tooltip="align-self: end" onClick={() => updateElementStyles(element.id, { alignSelf: 'end' })} active={vVal === 'end'} />
+                </div>
+              </>
+            )
+          }
+
+          // ── Block fallback (margin auto) ──
+          return (
+            <div className="flex items-center gap-0.5">
+              <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => updateElementStyles(element.id, { marginLeft: '0', marginRight: 'auto' })} active={element.styles.marginLeft === '0' && element.styles.marginRight === 'auto'} />
+              <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: 'auto' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === 'auto'} />
+              <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: '0' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === '0'} />
+              <div className="w-px h-5 bg-editor-border mx-1" />
+              <span className="text-[9px] text-editor-text-muted italic">V. indisponível (block)</span>
+            </div>
+          )
+        })()}
         {/* Linha 2: X, Y (posição absoluta) */}
         <div className="grid grid-cols-2 gap-1.5 mt-1.5">
           <InlineScrubField label="X" value={element.styles.left ?? ''} unit="px" onChange={v => { if (v) handleStyleChange('position', 'absolute'); handleStyleChange('left', v) }} styleKey="left" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
@@ -251,29 +334,29 @@ export function PropertiesPanel() {
 
       {tagHasLayout(tag) && (
         <Section title="Layout" icon={LayoutGrid} defaultOpen>
-          {LAYOUT_FIELDS.map(field => (
-            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
-          ))}
+          <Field key="display" field={LAYOUT_FIELDS[0]} value={element.styles.display ?? ''} onChange={v => handleStyleChange('display', v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+          {/* flexDirection como botões de ícone */}
+          {(element.styles.display === 'flex' || element.styles.display === 'inline-flex') && (
+            <>
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] text-editor-text-dim w-20 shrink-0">Direction</label>
+                <div className="flex gap-0.5">
+                  {([['row', ArrowRight], ['column', ArrowDown], ['row-reverse', ArrowLeft], ['column-reverse', ArrowUp]] as const).map(([dir, DirIcon]) => (
+                    <AlignButton key={dir} icon={DirIcon} tooltip={dir} onClick={() => handleStyleChange('flexDirection', dir)} active={element.styles.flexDirection === dir} />
+                  ))}
+                </div>
+              </div>
+              <Field key="flexWrap" field={LAYOUT_FIELDS[2]} value={element.styles.flexWrap ?? ''} onChange={v => handleStyleChange('flexWrap', v)} />
+              <Field key="justifyContent" field={LAYOUT_FIELDS[3]} value={element.styles.justifyContent ?? ''} onChange={v => handleStyleChange('justifyContent', v)} />
+              <Field key="alignItems" field={LAYOUT_FIELDS[4]} value={element.styles.alignItems ?? ''} onChange={v => handleStyleChange('alignItems', v)} />
+            </>
+          )}
+          <Field key="gap" field={LAYOUT_FIELDS[5]} value={element.styles.gap ?? ''} onChange={v => handleStyleChange('gap', v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+          <Field key="position" field={LAYOUT_FIELDS[6]} value={element.styles.position ?? ''} onChange={v => handleStyleChange('position', v)} />
         </Section>
       )}
 
       <Section title="Dimensões" icon={Ruler} defaultOpen>
-        {/* Botões de preset rápido */}
-        <div className="flex gap-1 mb-1.5">
-          {['100%', 'auto', 'fit-content'].map(preset => (
-            <button
-              key={preset}
-              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                element.styles.width === preset
-                  ? 'bg-editor-accent text-white border-editor-accent'
-                  : 'bg-editor-bg text-editor-text-dim border-editor-border hover:border-editor-accent'
-              }`}
-              onClick={() => handleStyleChange('width', preset)}
-            >
-              {preset === '100%' ? 'Largura total' : preset}
-            </button>
-          ))}
-        </div>
         <div className="grid grid-cols-2 gap-1.5">
           {DIMENSION_FIELDS.map(field => (
             <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
@@ -286,7 +369,7 @@ export function PropertiesPanel() {
         <div className="space-y-2">
           {/* Padding */}
           <div>
-            <div className="text-[10px] text-editor-text-dim mb-1 font-medium">Padding</div>
+            <div className="text-[10px] text-editor-text-dim mb-1 font-medium">P</div>
             <div className="grid grid-cols-4 gap-1">
               <SpacingInput label="↑" value={element.styles.paddingTop ?? ''} onChange={v => handleStyleChange('paddingTop', v)} styleKey="paddingTop" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
               <SpacingInput label="→" value={element.styles.paddingRight ?? ''} onChange={v => handleStyleChange('paddingRight', v)} styleKey="paddingRight" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
@@ -296,7 +379,7 @@ export function PropertiesPanel() {
           </div>
           {/* Margin */}
           <div>
-            <div className="text-[10px] text-editor-text-dim mb-1 font-medium">Margin</div>
+            <div className="text-[10px] text-editor-text-dim mb-1 font-medium">M</div>
             <div className="grid grid-cols-4 gap-1">
               <SpacingInput label="↑" value={element.styles.marginTop ?? ''} onChange={v => handleStyleChange('marginTop', v)} styleKey="marginTop" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
               <SpacingInput label="→" value={element.styles.marginRight ?? ''} onChange={v => handleStyleChange('marginRight', v)} styleKey="marginRight" onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
@@ -324,9 +407,30 @@ export function PropertiesPanel() {
 
       {tagHasTypography(tag) && (
         <Section title="Tipografia" icon={Type} defaultOpen>
-          {TYPOGRAPHY_FIELDS.map(field => (
-            <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+          {/* Cor — full width */}
+          <Field field={{ key: 'color', label: 'Cor', type: 'color' }} value={element.styles.color ?? ''} onChange={v => handleStyleChange('color', v)} />
+          {/* Família — full width */}
+          <Field field={{ key: 'fontFamily', label: 'Família', type: 'select', options: FONT_FAMILIES }} value={element.styles.fontFamily ?? ''} onChange={v => handleStyleChange('fontFamily', v)} />
+          {/* Linhas 2-col: tamanho/peso, altura/espaço, estilo/caixa, decoração/quebra */}
+          {TYPO_ROW_2COL.map(([left, right], i) => (
+            <div key={i} className="grid grid-cols-2 gap-1.5">
+              <Field field={left} value={element.styles[left.key] ?? ''} onChange={v => handleStyleChange(left.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+              <Field field={right} value={element.styles[right.key] ?? ''} onChange={v => handleStyleChange(right.key, v)} onScrubStart={handleScrubStart} onScrubMove={handleScrubMove} />
+            </div>
           ))}
+          {/* textAlign — botões de ícone */}
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] text-editor-text-dim w-10 shrink-0">Alinhar</label>
+            <div className="flex gap-0.5">
+              {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight], ['justify', AlignJustify]] as const).map(([align, AlignIcon]) => (
+                <AlignButton key={align} icon={AlignIcon} tooltip={`text-align: ${align}`} onClick={() => handleStyleChange('textAlign', align)} active={element.styles.textAlign === align} />
+              ))}
+            </div>
+          </div>
+          {/* verticalAlign — full width */}
+          <Field field={{ key: 'verticalAlign', label: 'Alinhar V.', type: 'select', options: ['baseline', 'top', 'middle', 'bottom', 'text-top', 'text-bottom'] }} value={element.styles.verticalAlign ?? ''} onChange={v => handleStyleChange('verticalAlign', v)} />
+          {/* textOverflow — full width */}
+          <Field field={{ key: 'textOverflow', label: 'Truncar', type: 'select', options: ['clip', 'ellipsis'] }} value={element.styles.textOverflow ?? ''} onChange={v => handleStyleChange('textOverflow', v)} />
           {LIST_TAGS.has(tag) && (
             <Field field={{ key: 'listStyleType', label: 'Marcador', type: 'select', options: ['disc', 'circle', 'square', 'decimal', 'decimal-leading-zero', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman', 'none'] }} value={element.styles.listStyleType ?? ''} onChange={v => handleStyleChange('listStyleType', v)} />
           )}
