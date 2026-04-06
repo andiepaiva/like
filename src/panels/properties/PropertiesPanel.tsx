@@ -111,19 +111,19 @@ const TYPOGRAPHY_FIELDS: FieldDef[] = [
 // Campos de tipografia agrupados em 2 colunas
 const TYPO_ROW_2COL: [FieldDef, FieldDef][] = [
   [
-    { key: 'fontSize', label: 'Tamanho', type: 'number', unit: 'px', min: 0, compact: true },
+    { key: 'fontSize', label: 'Tam.', type: 'number', unit: 'px', min: 0, compact: true },
     { key: 'fontWeight', label: 'Peso', type: 'select', options: FONT_WEIGHTS, compact: true },
   ],
   [
-    { key: 'lineHeight', label: 'Altura L.', type: 'number', step: 0.1, min: 0, compact: true },
-    { key: 'letterSpacing', label: 'Espaço', type: 'number', unit: 'em', step: 0.01, compact: true },
+    { key: 'lineHeight', label: 'Alt. L.', type: 'number', step: 0.1, min: 0, compact: true },
+    { key: 'letterSpacing', label: 'Esp.', type: 'number', unit: 'em', step: 0.01, compact: true },
   ],
   [
     { key: 'fontStyle', label: 'Estilo', type: 'select', options: ['normal', 'italic', 'oblique'], compact: true },
     { key: 'textTransform', label: 'Caixa', type: 'select', options: ['none', 'uppercase', 'lowercase', 'capitalize'], compact: true },
   ],
   [
-    { key: 'textDecoration', label: 'Decoração', type: 'select', options: ['none', 'underline', 'line-through', 'overline'], compact: true },
+    { key: 'textDecoration', label: 'Decor.', type: 'select', options: ['none', 'underline', 'line-through', 'overline'], compact: true },
     { key: 'whiteSpace', label: 'Quebra', type: 'select', options: ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line'], compact: true },
   ],
 ]
@@ -156,6 +156,18 @@ export function PropertiesPanel() {
   const pushHistory = useAppStore(s => s.pushHistory)
   const updateElement = useAppStore(s => s.updateElement)
   const renameElement = useAppStore(s => s.renameElement)
+  const root = useAppStore(s => s.project?.root)
+
+  // Detectar contexto do pai para alinhamento
+  const parentContext = useMemo(() => {
+    if (!root || !element) return { display: 'block' as string, flexDir: '' as string }
+    const parent = findParentOf(root, element.id)
+    if (!parent) return { display: 'block', flexDir: '' }
+    return {
+      display: parent.styles.display ?? 'block',
+      flexDir: parent.styles.flexDirection ?? 'row',
+    }
+  }, [root, element])
 
   if (elements.length === 0) {
     return (
@@ -181,18 +193,6 @@ export function PropertiesPanel() {
 
   if (!element) return null
   const tag = element.tag
-  const root = useAppStore(s => s.project?.root)
-
-  // Detectar contexto do pai para alinhamento
-  const parentContext = useMemo(() => {
-    if (!root) return { display: 'block' as string, flexDir: '' as string }
-    const parent = findParentOf(root, element.id)
-    if (!parent) return { display: 'block', flexDir: '' }
-    return {
-      display: parent.styles.display ?? 'block',
-      flexDir: parent.styles.flexDirection ?? 'row',
-    }
-  }, [root, element.id])
 
   function handleStyleChange(key: string, value: string) {
     if (!element) return
@@ -246,58 +246,96 @@ export function PropertiesPanel() {
         </div>
       </div>
 
-      {/* ─── Alinhamento (context-aware) ─── */}
+      {/* ─── Alinhamento (context-aware, estilo Figma: sempre 6 botões) ─── */}
       <Section title="Alinhamento" icon={Move} defaultOpen>
-        {/* Botões de alinhamento baseados no contexto do pai */}
         {(() => {
           const isFlex = parentContext.display === 'flex' || parentContext.display === 'inline-flex'
           const isGrid = parentContext.display === 'grid'
           const isRow = parentContext.flexDir === 'row' || parentContext.flexDir === 'row-reverse'
 
-          // ── Flex context ──
-          if (isFlex) {
-            // No flex, o eixo cruzado usa alignSelf
-            // Eixo principal: controlado por justifyContent do pai (não pelo filho)
-            const crossAxisLabel = isRow ? 'Vertical' : 'Horizontal'
-            const crossVal = element.styles.alignSelf ?? ''
-            return (
-              <div className="flex items-center gap-0.5">
-                <span className="text-[9px] text-editor-text-dim mr-1">{crossAxisLabel}</span>
-                <AlignButton icon={isRow ? AlignVerticalJustifyStart : AlignHorizontalJustifyStart} tooltip="flex-start" onClick={() => updateElementStyles(element.id, { alignSelf: 'flex-start' })} active={crossVal === 'flex-start'} />
-                <AlignButton icon={isRow ? AlignVerticalJustifyCenter : AlignHorizontalJustifyCenter} tooltip="center" onClick={() => updateElementStyles(element.id, { alignSelf: 'center' })} active={crossVal === 'center'} />
-                <AlignButton icon={isRow ? AlignVerticalJustifyEnd : AlignHorizontalJustifyEnd} tooltip="flex-end" onClick={() => updateElementStyles(element.id, { alignSelf: 'flex-end' })} active={crossVal === 'flex-end'} />
-                <AlignButton icon={isRow ? AlignVerticalSpaceBetween : AlignHorizontalSpaceBetween} tooltip="stretch" onClick={() => updateElementStyles(element.id, { alignSelf: 'stretch' })} active={crossVal === 'stretch'} />
-              </div>
-            )
+          // ── Helpers de estado ativo ──
+          const s = element.styles
+          const asRecord = s as Record<string, string | undefined>
+
+          // ── Determinar ações por contexto ──
+          let hActive: 'start' | 'center' | 'end' | null = null
+          let vActive: 'start' | 'center' | 'end' | null = null
+          let onH: (pos: 'start' | 'center' | 'end') => void
+          let onV: (pos: 'start' | 'center' | 'end') => void
+          let vDisabled = false
+
+          if (isFlex && isRow) {
+            // Flex row: H = main axis (margin auto), V = cross axis (alignSelf)
+            if (s.marginLeft === '0' && s.marginRight === 'auto') hActive = 'start'
+            else if (s.marginLeft === 'auto' && s.marginRight === 'auto') hActive = 'center'
+            else if (s.marginLeft === 'auto' && s.marginRight === '0') hActive = 'end'
+
+            if (s.alignSelf === 'flex-start') vActive = 'start'
+            else if (s.alignSelf === 'center') vActive = 'center'
+            else if (s.alignSelf === 'flex-end') vActive = 'end'
+
+            onH = pos => {
+              const map = { start: { marginLeft: '0', marginRight: 'auto' }, center: { marginLeft: 'auto', marginRight: 'auto' }, end: { marginLeft: 'auto', marginRight: '0' } }
+              updateElementStyles(element.id, map[pos])
+            }
+            onV = pos => {
+              const map = { start: 'flex-start', center: 'center', end: 'flex-end' }
+              updateElementStyles(element.id, { alignSelf: map[pos] })
+            }
+          } else if (isFlex && !isRow) {
+            // Flex column: H = cross axis (alignSelf), V = main axis (margin auto)
+            if (s.alignSelf === 'flex-start') hActive = 'start'
+            else if (s.alignSelf === 'center') hActive = 'center'
+            else if (s.alignSelf === 'flex-end') hActive = 'end'
+
+            if (s.marginTop === '0' && s.marginBottom === 'auto') vActive = 'start'
+            else if (s.marginTop === 'auto' && s.marginBottom === 'auto') vActive = 'center'
+            else if (s.marginTop === 'auto' && s.marginBottom === '0') vActive = 'end'
+
+            onH = pos => {
+              const map = { start: 'flex-start', center: 'center', end: 'flex-end' }
+              updateElementStyles(element.id, { alignSelf: map[pos] })
+            }
+            onV = pos => {
+              const map = { start: { marginTop: '0', marginBottom: 'auto' }, center: { marginTop: 'auto', marginBottom: 'auto' }, end: { marginTop: 'auto', marginBottom: '0' } }
+              updateElementStyles(element.id, map[pos])
+            }
+          } else if (isGrid) {
+            // Grid: H = justifySelf, V = alignSelf
+            const jSelf = asRecord.justifySelf ?? ''
+            if (jSelf === 'start') hActive = 'start'
+            else if (jSelf === 'center') hActive = 'center'
+            else if (jSelf === 'end') hActive = 'end'
+
+            if (s.alignSelf === 'start') vActive = 'start'
+            else if (s.alignSelf === 'center') vActive = 'center'
+            else if (s.alignSelf === 'end') vActive = 'end'
+
+            onH = pos => updateElementStyles(element.id, { justifySelf: pos } as any)
+            onV = pos => updateElementStyles(element.id, { alignSelf: pos })
+          } else {
+            // Block fallback: H = text-align, V = desabilitado
+            if (s.textAlign === 'left' || (!s.textAlign && !hActive)) hActive = 'start'
+            else if (s.textAlign === 'center') hActive = 'center'
+            else if (s.textAlign === 'right') hActive = 'end'
+
+            onH = pos => {
+              const map = { start: 'left', center: 'center', end: 'right' }
+              updateElementStyles(element.id, { textAlign: map[pos] })
+            }
+            onV = () => {}
+            vDisabled = true
           }
 
-          // ── Grid context ──
-          if (isGrid) {
-            const hVal = (element.styles as Record<string, string | undefined>).justifySelf ?? ''
-            const vVal = element.styles.alignSelf ?? ''
-            return (
-              <>
-                <div className="flex items-center gap-0.5">
-                  <AlignButton icon={AlignHorizontalJustifyStart} tooltip="justify-self: start" onClick={() => updateElementStyles(element.id, { justifySelf: 'start' } as any)} active={hVal === 'start'} />
-                  <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="justify-self: center" onClick={() => updateElementStyles(element.id, { justifySelf: 'center' } as any)} active={hVal === 'center'} />
-                  <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="justify-self: end" onClick={() => updateElementStyles(element.id, { justifySelf: 'end' } as any)} active={hVal === 'end'} />
-                  <div className="w-px h-5 bg-editor-border mx-1" />
-                  <AlignButton icon={AlignVerticalJustifyStart} tooltip="align-self: start" onClick={() => updateElementStyles(element.id, { alignSelf: 'start' })} active={vVal === 'start'} />
-                  <AlignButton icon={AlignVerticalJustifyCenter} tooltip="align-self: center" onClick={() => updateElementStyles(element.id, { alignSelf: 'center' })} active={vVal === 'center'} />
-                  <AlignButton icon={AlignVerticalJustifyEnd} tooltip="align-self: end" onClick={() => updateElementStyles(element.id, { alignSelf: 'end' })} active={vVal === 'end'} />
-                </div>
-              </>
-            )
-          }
-
-          // ── Block fallback (margin auto) ──
           return (
             <div className="flex items-center gap-0.5">
-              <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => updateElementStyles(element.id, { marginLeft: '0', marginRight: 'auto' })} active={element.styles.marginLeft === '0' && element.styles.marginRight === 'auto'} />
-              <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: 'auto' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === 'auto'} />
-              <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => updateElementStyles(element.id, { marginLeft: 'auto', marginRight: '0' })} active={element.styles.marginLeft === 'auto' && element.styles.marginRight === '0'} />
+              <AlignButton icon={AlignHorizontalJustifyStart} tooltip="Alinhar à esquerda" onClick={() => onH('start')} active={hActive === 'start'} />
+              <AlignButton icon={AlignHorizontalJustifyCenter} tooltip="Centralizar horizontal" onClick={() => onH('center')} active={hActive === 'center'} />
+              <AlignButton icon={AlignHorizontalJustifyEnd} tooltip="Alinhar à direita" onClick={() => onH('end')} active={hActive === 'end'} />
               <div className="w-px h-5 bg-editor-border mx-1" />
-              <span className="text-[9px] text-editor-text-muted italic">V. indisponível (block)</span>
+              <AlignButton icon={AlignVerticalJustifyStart} tooltip="Alinhar ao topo" onClick={() => onV('start')} active={vActive === 'start'} disabled={vDisabled} />
+              <AlignButton icon={AlignVerticalJustifyCenter} tooltip="Centralizar vertical" onClick={() => onV('center')} active={vActive === 'center'} disabled={vDisabled} />
+              <AlignButton icon={AlignVerticalJustifyEnd} tooltip="Alinhar à base" onClick={() => onV('end')} active={vActive === 'end'} disabled={vDisabled} />
             </div>
           )
         })()}
@@ -826,15 +864,18 @@ function weightLabel(w: string) {
   return map[w] ?? w
 }
 
-function AlignButton({ icon: Icon, tooltip, onClick, active }: { icon: LucideIcon; tooltip: string; onClick: () => void; active: boolean }) {
+function AlignButton({ icon: Icon, tooltip, onClick, active, disabled }: { icon: LucideIcon; tooltip: string; onClick: () => void; active: boolean; disabled?: boolean }) {
   return (
     <button
       title={tooltip}
       onClick={onClick}
+      disabled={disabled}
       className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
-        active
-          ? 'bg-editor-accent-dim text-editor-accent'
-          : 'text-editor-text-dim hover:text-editor-text hover:bg-editor-surface-alt'
+        disabled
+          ? 'text-editor-text-muted/30 cursor-not-allowed'
+          : active
+            ? 'bg-editor-accent-dim text-editor-accent'
+            : 'text-editor-text-dim hover:text-editor-text hover:bg-editor-surface-alt'
       }`}
     >
       <Icon size={14} strokeWidth={1.5} />

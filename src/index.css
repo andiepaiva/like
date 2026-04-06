@@ -50,3 +50,12 @@
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
+
+/* ─── Reset dentro do artboard ────────────────────────── */
+/* Remove estilos da UA stylesheet para que elementos do   */
+/* usuário não herdem margins/paddings inesperados.        */
+[data-artboard] * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
