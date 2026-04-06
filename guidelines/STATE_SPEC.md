@@ -30,7 +30,9 @@ interface AppStore {
   updateElementStylesSilent: (id: string, styles: Partial<CSSProperties>) => void
   insertElement: (parentId: string, element: ElementNode) => void
   deleteElement: (id: string) => void
+  deleteElements: (ids: string[]) => void   // batch — filtra pai+filho, 1 pushHistory
   duplicateElement: (id: string) => void
+  duplicateElements: (ids: string[]) => void // batch — filtra pai+filho, seleciona clones
   moveElement: (id: string, newParentId: string, index: number) => void
   renameElement: (id: string, label: string) => void
 
@@ -135,8 +137,8 @@ const project = useAppStore(s => s.project)
 | `Canvas` | `project.root`, `selectedElementIds`, `setSelectedElementIds`, `toggleSelectedElement`, `canvasSettings`, `updateCanvasSettings` |
 | `LayersPanel` | `project.root`, `selectedElementIds`, `setSelectedElementIds`, `toggleSelectedElement`, `addSelectedElement` |
 | `PropertiesPanel` | `selectedElementIds` + elemento derivado de `project.root`, `updateElementStyles`, `renameElement`, `updateElement` |
-| `Toolbar` | `isSaved`, `canvasSettings`, `updateCanvasSettings`, `undo`, `redo`, `insertElement`, `deleteElement`, `duplicateElement` |
-| `MenuBar` | `canvasSettings`, `undo`, `redo`, `setProject` |
+| `Toolbar` | `isSaved`, `canvasSettings`, `updateCanvasSettings`, `undo`, `redo`, `insertElement`, `deleteElements`, `duplicateElements` |
+| `MenuBar` | `canvasSettings`, `undo`, `redo`, `setProject`, `deleteElements`, `duplicateElements` |
 | `VariablesPanel` | `project.tokens`, `addToken`, `updateToken`, `deleteToken` |
 | `SelectionOverlay` | `pushHistory`, `updateElementStylesSilent`, nó derivado de `project.root` |
 

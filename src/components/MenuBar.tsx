@@ -97,7 +97,12 @@ export function MenuBar({ onOpenVariables }: { onOpenVariables?: () => void }) {
       label: 'Arquivo',
       icon: FileText,
       items: [
-        { type: 'action', label: 'Novo projeto', icon: Plus, shortcut: 'Ctrl+N', onClick: () => { setProject(createEmptyProject()); setOpenMenu(null) } },
+        { type: 'action', label: 'Novo projeto', icon: Plus, shortcut: 'Ctrl+N', onClick: () => {
+          const { isSaved } = useAppStore.getState()
+          if (!isSaved && !window.confirm('Você tem alterações não salvas. Deseja criar um novo projeto?')) return
+          setProject(createEmptyProject())
+          setOpenMenu(null)
+        } },
         { type: 'action', label: 'Abrir...', icon: FolderOpen, shortcut: 'Ctrl+O', onClick: () => setOpenMenu(null), disabled: true },
         { type: 'separator' },
         { type: 'action', label: 'Salvar', icon: Save, shortcut: 'Ctrl+S', onClick: () => setOpenMenu(null), disabled: true },

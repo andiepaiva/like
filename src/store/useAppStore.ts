@@ -162,23 +162,36 @@ export const useAppStore = create<AppStore>((set, get) => ({
   duplicateElements: (ids) => {
     const { project } = get()
     if (!project) return
-    const validIds = ids.filter(id => project.root.id !== id)
-    if (validIds.length === 0) return
+    const idSet = new Set(ids.filter(id => project.root.id !== id))
+    if (idSet.size === 0) return
+    // Filtrar IDs cujo ancestral também está na seleção (evitar duplicação dupla)
+    const topLevel = [...idSet].filter(id => {
+      let parent = findParentOf(project.root, id)
+      while (parent) {
+        if (idSet.has(parent.id)) return false
+        parent = findParentOf(project.root, parent.id)
+      }
+      return true
+    })
+    if (topLevel.length === 0) return
     get().pushHistory()
     let newRoot = project.root
-    for (const id of validIds) {
+    const cloneIds: string[] = []
+    for (const id of topLevel) {
       const original = findElementById(newRoot, id)
       if (!original) continue
       const parent = findParentOf(newRoot, id)
       if (!parent) continue
       const clone = cloneSubtree(original, generateId)
       clone.label = `${original.label} (cópia)`
+      cloneIds.push(clone.id)
       const siblingIndex = parent.children.findIndex(c => c.id === id)
       newRoot = insertNodeInTree(newRoot, parent.id, clone, siblingIndex + 1)
     }
     const now = new Date().toISOString()
     set({
       project: { ...project, updatedAt: now, root: newRoot },
+      selectedElementIds: cloneIds,
       isSaved: false,
     })
   },

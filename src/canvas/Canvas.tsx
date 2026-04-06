@@ -125,8 +125,7 @@ export function Canvas() {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-hidden relative"
-      style={{ backgroundColor: '#2b2b3a' }}
+      className="flex-1 overflow-hidden relative bg-editor-bg"
       onWheel={handleWheel}
       onClick={handleBackgroundClick}
     >
@@ -137,8 +136,8 @@ export function Canvas() {
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage: `
-              linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
+              linear-gradient(to right, color-mix(in srgb, var(--color-editor-border) 30%, transparent) 1px, transparent 1px),
+              linear-gradient(to bottom, color-mix(in srgb, var(--color-editor-border) 30%, transparent) 1px, transparent 1px)
             `,
             backgroundSize: `${canvasSettings.gridSize * canvasSettings.zoom}px ${canvasSettings.gridSize * canvasSettings.zoom}px`,
             backgroundPosition: `${canvasSettings.offsetX % (canvasSettings.gridSize * canvasSettings.zoom)}px ${canvasSettings.offsetY % (canvasSettings.gridSize * canvasSettings.zoom)}px`,
