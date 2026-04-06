@@ -119,10 +119,15 @@ const TYPOGRAPHY_FIELDS: FieldDef[] = [
   { key: 'fontFamily', label: 'Família', type: 'select', options: FONT_FAMILIES },
   { key: 'fontSize', label: 'Tamanho', type: 'combo', options: FONT_SIZES },
   { key: 'fontWeight', label: 'Peso', type: 'select', options: FONT_WEIGHTS },
+  { key: 'fontStyle', label: 'Estilo', type: 'select', options: ['normal', 'italic', 'oblique'] },
   { key: 'lineHeight', label: 'Altura L.', type: 'combo', options: LINE_HEIGHTS },
   { key: 'letterSpacing', label: 'Espaço', type: 'combo', options: LETTER_SPACINGS },
   { key: 'textAlign', label: 'Alinhamento', type: 'select', options: ['left', 'center', 'right', 'justify'] },
+  { key: 'verticalAlign', label: 'Alinhar V.', type: 'select', options: ['baseline', 'top', 'middle', 'bottom', 'text-top', 'text-bottom'] },
   { key: 'textDecoration', label: 'Decoração', type: 'select', options: ['none', 'underline', 'line-through', 'overline'] },
+  { key: 'textTransform', label: 'Caixa', type: 'select', options: ['none', 'uppercase', 'lowercase', 'capitalize'] },
+  { key: 'whiteSpace', label: 'Quebra', type: 'select', options: ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line'] },
+  { key: 'textOverflow', label: 'Truncar', type: 'select', options: ['clip', 'ellipsis'] },
 ]
 
 // ─── Tags que suportam cada seção ────────────────────────
@@ -138,10 +143,11 @@ const TEXT_TAGS: Set<string> = new Set([
 ])
 
 const INPUT_TAGS: Set<string> = new Set(['input', 'textarea', 'select'])
+const LIST_TAGS: Set<string> = new Set(['ul', 'ol', 'li'])
 const VOID_TAGS: Set<string> = new Set(['img', 'input', 'br', 'hr'])
 
 function tagHasLayout(tag: string) { return CONTAINER_TAGS.has(tag) || tag === 'button' }
-function tagHasTypography(tag: string) { return TEXT_TAGS.has(tag) || INPUT_TAGS.has(tag) }
+function tagHasTypography(tag: string) { return TEXT_TAGS.has(tag) || INPUT_TAGS.has(tag) || LIST_TAGS.has(tag) }
 function tagHasContent(tag: string) { return !VOID_TAGS.has(tag) }
 
 export function PropertiesPanel() {
@@ -352,6 +358,9 @@ export function PropertiesPanel() {
           {TYPOGRAPHY_FIELDS.map(field => (
             <Field key={field.key} field={field} value={element.styles[field.key] ?? ''} onChange={v => handleStyleChange(field.key, v)} />
           ))}
+          {LIST_TAGS.has(tag) && (
+            <Field field={{ key: 'listStyleType', label: 'Marcador', type: 'select', options: ['disc', 'circle', 'square', 'decimal', 'decimal-leading-zero', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman', 'none'] }} value={element.styles.listStyleType ?? ''} onChange={v => handleStyleChange('listStyleType', v)} />
+          )}
         </Section>
       )}
     </div>

@@ -135,6 +135,11 @@ interface CSSProperties {
   letterSpacing?: string
   textAlign?: string
   textDecoration?: string
+  textTransform?: string      // uppercase, lowercase, capitalize, none
+  whiteSpace?: string         // normal, nowrap, pre, pre-wrap, pre-line
+  textOverflow?: string       // clip, ellipsis
+  listStyleType?: string      // disc, decimal, none, etc.
+  verticalAlign?: string      // baseline, top, middle, bottom
   color?: string
 
   // Outros

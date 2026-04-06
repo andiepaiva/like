@@ -75,6 +75,11 @@ export interface CSSProperties {
   letterSpacing?: string
   textAlign?: string
   textDecoration?: string
+  textTransform?: string
+  whiteSpace?: string
+  textOverflow?: string
+  listStyleType?: string
+  verticalAlign?: string
   color?: string
 
   // Outros
